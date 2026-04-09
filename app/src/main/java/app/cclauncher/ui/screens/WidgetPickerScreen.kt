@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import app.cclauncher.ui.components.ScrollbarIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
@@ -71,31 +73,46 @@ fun WidgetPickerScreen(
             } else if (widgetList.isEmpty()) {
                 Text("No widgets found.", modifier = Modifier.align(Alignment.Center))
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp)
-                ) {
-                    widgetList.forEach { group ->
-                        item {
-                            Text(
-                                text = group.appName,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)
-                            )
+                val listState = rememberLazyListState()
+                // 1 header + N widgets + 1 divider per group
+                val totalItems = widgetList.sumOf { 2 + it.widgets.size }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(8.dp)
+                    ) {
+                        widgetList.forEach { group ->
+                            item {
+                                Text(
+                                    text = group.appName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)
+                                )
+                            }
+                            items(group.widgets, key = { it.provider.flattenToString() }) { widgetInfo ->
+                                WidgetInfoItem(
+                                    context = context,
+                                    widgetInfo = widgetInfo,
+                                    onClick = { onWidgetSelected(widgetInfo) }
+                                )
+                            }
+                            item {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    thickness = Dp.Hairline,
+                                    color = Color.Transparent
+                                )
+                            }
                         }
-                        items(group.widgets, key = { it.provider.flattenToString() }) { widgetInfo ->
-                            WidgetInfoItem(
-                                context = context,
-                                widgetInfo = widgetInfo,
-                                onClick = { onWidgetSelected(widgetInfo) }
-                            )
-                        }
-                        item { HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            thickness = Dp.Hairline,
-                            color = Color.Transparent
-                        ) }
                     }
+
+                    ScrollbarIndicator(
+                        listState = listState,
+                        totalItems = totalItems,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    )
                 }
             }
         }

@@ -20,18 +20,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import app.cclauncher.ui.components.ScrollbarIndicator
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+
 import androidx.compose.ui.unit.Dp
-import kotlin.math.roundToInt
+
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -814,99 +810,3 @@ fun AppDrawerSearch(
     )
 }
 
-@Composable
-private fun ScrollbarIndicator(
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    totalItems: Int,
-    reverseLayout: Boolean,
-    modifier: Modifier = Modifier,
-    thumbWidthDp: Dp = 6.dp,
-    minThumbHeightDp: Dp = 40.dp,
-    touchTargetWidthDp: Dp = 36.dp,
-) {
-    val density = LocalDensity.current
-    var trackHeightPx by remember { mutableStateOf(0f) }
-
-    val layoutInfo = listState.layoutInfo
-    val visibleItems = layoutInfo.visibleItemsInfo
-
-    if (visibleItems.isEmpty() || totalItems <= 0) return
-
-    val viewportHeight = (layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset).toFloat()
-    if (viewportHeight <= 0f) return
-
-    val averageItemSize = visibleItems.sumOf { it.size } / visibleItems.size.toFloat()
-    val estimatedTotalHeight = averageItemSize * totalItems
-
-    // Don't show scrollbar if content fits in viewport
-    if (estimatedTotalHeight <= viewportHeight) return
-
-    val proportion = viewportHeight / estimatedTotalHeight
-    val minThumbHeightPx = with(density) { minThumbHeightDp.toPx() }
-    val thumbHeightPx = (trackHeightPx * proportion).coerceAtLeast(minThumbHeightPx)
-    val thumbHeightDp = with(density) { thumbHeightPx.toDp() }
-
-    val scrollRange = estimatedTotalHeight - viewportHeight
-    val firstItem = visibleItems.first()
-    val scrollOffset = firstItem.index * averageItemSize + (firstItem.offset - layoutInfo.viewportStartOffset) * -1f
-    var scrollFraction = (scrollOffset / scrollRange).coerceIn(0f, 1f)
-
-    // In reverse layout, invert the scrollbar position so it visually matches scroll direction
-    if (reverseLayout) {
-        scrollFraction = 1f - scrollFraction
-    }
-
-    val usableTrack = trackHeightPx - thumbHeightPx
-    val thumbOffsetPx = usableTrack * scrollFraction
-    val thumbOffsetDp = with(density) { thumbOffsetPx.toDp() }
-
-    // Animate thumb position for smoothness
-    val animatedOffsetDp by animateFloatAsState(
-        targetValue = with(density) { thumbOffsetDp.toPx() },
-        animationSpec = tween(durationMillis = 50),
-        label = "scrollbar"
-    )
-
-    var isDragging by remember { mutableStateOf(false) }
-
-    // Wider invisible touch target, with the visible thumb inside
-    Box(
-        modifier = modifier
-            .width(touchTargetWidthDp)
-            .fillMaxHeight()
-            .onSizeChanged { trackHeightPx = it.height.toFloat() }
-            .pointerInput(totalItems, reverseLayout) {
-                detectVerticalDragGestures(
-                    onDragStart = { isDragging = true },
-                    onDragEnd = { isDragging = false },
-                    onDragCancel = { isDragging = false },
-                ) { change, _ ->
-                    change.consume()
-                    val y = change.position.y
-                    val usable = trackHeightPx - thumbHeightPx
-                    if (usable <= 0f) return@detectVerticalDragGestures
-                    var dragFraction = ((y - thumbHeightPx / 2f) / usable).coerceIn(0f, 1f)
-                    if (reverseLayout) {
-                        dragFraction = 1f - dragFraction
-                    }
-                    val targetIndex = (dragFraction * (totalItems - 1)).roundToInt()
-                    kotlinx.coroutines.runBlocking {
-                        listState.scrollToItem(targetIndex)
-                    }
-                }
-            },
-        contentAlignment = Alignment.TopEnd
-    ) {
-        // Visible thumb
-        Box(
-            modifier = Modifier
-                .width(thumbWidthDp)
-                .height(thumbHeightDp)
-                .offset(y = with(density) { animatedOffsetDp.toDp() })
-                .background(
-                    color = if (isDragging) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.4f),
-                    shape = RoundedCornerShape(thumbWidthDp / 2)
-                )
-        )
-    }
-}

@@ -122,7 +122,10 @@ fun CLauncherNavigation(
             }
 
             UiEvent.NavigateToWidgetPicker -> {
-                navigateTo(LauncherDestination.WidgetPicker)
+                if (backStack.lastOrNull() != LauncherDestination.Settings) {
+                    navigateTo(LauncherDestination.Settings)
+                }
+                pushOnTop(LauncherDestination.WidgetPicker)
             }
 
             UiEvent.NavigateBack -> {
@@ -288,7 +291,13 @@ fun CLauncherNavigation(
                         viewModel.startWidgetConfiguration(providerInfo)
                         popToHome()
                     },
-                    onDismiss = { popToHome() }
+                    onDismiss = {
+                        if (backStack.lastOrNull() == LauncherDestination.WidgetPicker) {
+                            backStack.removeAt(backStack.lastIndex)
+                        } else {
+                            navigateTo(LauncherDestination.Settings)
+                        }
+                    }
                 )
             }
 
@@ -337,7 +346,7 @@ fun CLauncherNavigation(
             NavDisplay(
                 backStack = backStack,
                 onBack = {
-                    popToHome()
+                    if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
                 },
                 entryDecorators = listOf(
                     rememberSaveableStateHolderNavEntryDecorator(),
