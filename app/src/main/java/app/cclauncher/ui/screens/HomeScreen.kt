@@ -274,9 +274,11 @@ fun HomeScreen(
         showAppContextMenu?.let { appItem ->
             val currentItem = homeLayoutState.items.find { it.id == appItem.id } as? HomeItem.App
             currentItem?.let {
+                val homeFolders = homeLayoutState.items.filterIsInstance<HomeItem.Folder>()
                 HomeAppContextMenu(
                     appItem = it,
                     pageCount = homeLayoutState.pageCount,
+                    folders = homeFolders,
                     onDismiss = { showAppContextMenu = null },
                     onRemove = { app ->
                         viewModel.removeAppFromHomeScreen(app)
@@ -293,6 +295,11 @@ fun HomeScreen(
                     },
                     onMoveToPage = { app, targetPage ->
                         viewModel.moveItemToPage(app, targetPage)
+                        showAppContextMenu = null
+                    },
+                    onAddToFolder = { folder ->
+                        viewModel.addAppToFolder(folder.id, it.appModel)
+                        viewModel.removeAppFromHomeScreen(it)
                         showAppContextMenu = null
                     }
                 )
@@ -521,7 +528,7 @@ private fun HomeScreenPage(
             appBeingMoved = appBeingMoved,
             folderBeingMoved = folderBeingMoved,
             onAppClick = onAppClick,
-            onAppLongPress = onAppLongPress,
+            onAppLongPress = { app -> if (isMoving) onCancelMovement() else onAppLongPress(app) },
             onWidgetLongPress = onWidgetLongPress,
             onFolderClick = onFolderClick,
             onFolderLongPress = onFolderLongPress,
@@ -788,13 +795,16 @@ fun WidgetContextMenu(
 fun HomeAppContextMenu(
     appItem: HomeItem.App,
     pageCount: Int = 1,
+    folders: List<HomeItem.Folder> = emptyList(),
     onDismiss: () -> Unit,
     onRemove: (HomeItem.App) -> Unit,
     onResize: (HomeItem.App) -> Unit,
     onMove: (HomeItem.App) -> Unit,
-    onMoveToPage: (HomeItem.App, Int) -> Unit
+    onMoveToPage: (HomeItem.App, Int) -> Unit,
+    onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
+    var showFolderPicker by remember { mutableStateOf(false) }
 
     if (showPageSelector) {
         PageSelectorDialog(
@@ -805,6 +815,27 @@ fun HomeAppContextMenu(
                 onMoveToPage(appItem, targetPage)
                 showPageSelector = false
                 onDismiss()
+            }
+        )
+    } else if (showFolderPicker) {
+        AlertDialog(
+            onDismissRequest = { showFolderPicker = false },
+            title = { Text("Add to Folder") },
+            text = {
+                Column {
+                    folders.forEach { folder ->
+                        DropdownMenuItem(
+                            text = { Text("${folder.title} (${folder.apps.size} apps)") },
+                            onClick = {
+                                onAddToFolder?.invoke(folder)
+                                showFolderPicker = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderPicker = false }) { Text("Cancel") }
             }
         )
     } else {
@@ -827,6 +858,12 @@ fun HomeAppContextMenu(
                         text = { Text("Resize") },
                         onClick = { onResize(appItem); onDismiss() }
                     )
+                    if (folders.isNotEmpty() && onAddToFolder != null) {
+                        DropdownMenuItem(
+                            text = { Text("Add to Folder...") },
+                            onClick = { showFolderPicker = true }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Remove") },
                         onClick = { onRemove(appItem); onDismiss() }

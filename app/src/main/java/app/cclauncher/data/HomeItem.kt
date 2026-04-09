@@ -67,12 +67,18 @@ data class FolderApp(
     val column: Int = 0,
     val rowSpan: Int = 1,
     val columnSpan: Int = 1,
+    val isSystemShortcut: Boolean = false,
+    val systemShortcutId: String? = null,
+    val systemShortcutPackage: String? = null,
 ) {
     fun toAppModel() = AppModel(
         appLabel = appLabel,
         appPackage = appPackage,
         activityClassName = activityClassName?.takeIf { it.isNotBlank() },
         userString = userString,
+        isSystemShortcut = isSystemShortcut,
+        systemShortcutId = systemShortcutId,
+        systemShortcutPackage = systemShortcutPackage,
     )
 }
 
@@ -83,6 +89,9 @@ fun AppModel.toFolderApp(row: Int, column: Int) = FolderApp(
     userString = userString,
     row = row,
     column = column,
+    isSystemShortcut = isSystemShortcut,
+    systemShortcutId = systemShortcutId,
+    systemShortcutPackage = systemShortcutPackage,
 )
 
 @Serializable

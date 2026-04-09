@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,13 +118,16 @@ fun HomeAppItem(
         else -> TextAlign.Left
     }
 
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+
     Column(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { onClick() },
-                    onLongPress = { onLongClick() }
+                    onTap = { currentOnClick() },
+                    onLongPress = { currentOnLongClick() }
                 )
             }
             .padding(4.dp),

@@ -553,6 +553,14 @@ fun AppDrawerScreen(
                             openAppInfo(context, app)
                             dismissMenu()
                         }
+                        val homeLayoutShortcut by viewModel.homeLayoutState.collectAsState()
+                        val foldersForShortcut = homeLayoutShortcut.items.filterIsInstance<HomeItem.Folder>()
+                        if (foldersForShortcut.isNotEmpty()) {
+                            ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
+                                showFolderPickerForApp = app
+                                dismissMenu()
+                            }
+                        }
                         ContextMenuItem("Delete", Icons.Default.Delete) {
                             viewModel.deleteSystemShortcut(app)
                             dismissMenu()
