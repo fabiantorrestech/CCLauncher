@@ -407,10 +407,11 @@ fun AppDrawerScreen(
                 else -> {
                     Box(
                         modifier = if (isBottomSearch) {
+                            // Don't give the box a fixed height — let it wrap its content so
+                            // align(BottomStart) actually pins a short list just above the search bar.
                             Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = maxListHeight)
                                 .align(Alignment.BottomStart)
+                                .fillMaxWidth()
                         } else {
                             Modifier.fillMaxSize()
                         }
@@ -418,7 +419,12 @@ fun AppDrawerScreen(
                         LazyColumn(
                             state = scrollState,
                             reverseLayout = shouldReverseLayout,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = if (isBottomSearch) {
+                                // Grow up to the full available height but never expand the box past it.
+                                Modifier.fillMaxWidth().heightIn(max = maxListHeight)
+                            } else {
+                                Modifier.fillMaxSize()
+                            },
                             verticalArrangement = Arrangement.spacedBy(itemSpacing)
                         ) {
                             items(
