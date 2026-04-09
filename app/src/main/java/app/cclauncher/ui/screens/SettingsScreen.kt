@@ -462,12 +462,22 @@ fun SettingsScreen(
                                 val meta = field.meta
                                 val isEnabled = if (meta != null) schema.isEnabled(uiState, field) else false
 
+                                // Indent sub-settings: those that depend on another setting,
+                                // or those that are visually grouped under a parent but always enabled.
+                                val visuallyGroupedUnderParent = setOf(
+                                    "invertSearchResultsOrder",
+                                    "reverseAppListDirection",
+                                )
+                                val isSubSetting = meta?.dependsOn?.isNotBlank() == true
+                                    || field.name in visuallyGroupedUnderParent
+
                                 if (meta != null) {
                                     when (meta.type) {
                                         Toggle::class -> {
                                             val value = (field.get(uiState) as? Boolean) ?: false
                                             SettingsToggle(
                                                 title = meta.title,
+                                                modifier = if (isSubSetting) Modifier.padding(start = 24.dp) else Modifier,
                                                 description = meta.description.takeIf { it.isNotEmpty() },
                                                 isChecked = value,
                                                 enabled = isEnabled,

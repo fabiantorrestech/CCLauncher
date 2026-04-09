@@ -86,7 +86,7 @@ data class AppSettings(
 
     @Setting(
         title = "Invert Search Results Order",
-        description = "Best match appears furthest from the search bar instead of nearest",
+        description = "Recommended for Bottom Search Bar Placement. Best match appears furthest from the search bar instead of nearest",
         category = General::class,
         type = Toggle::class,
         key = "INVERT_SEARCH_RESULTS_ORDER",
@@ -95,12 +95,31 @@ data class AppSettings(
 
     @Setting(
         title = "Reverse App List Direction",
-        description = "Full unfiltered app list renders bottom-to-top",
+        description = "Recommended for Bottom Search Bar Placement. Full unfiltered app list renders bottom-to-top",
         category = General::class,
         type = Toggle::class,
         key = "REVERSE_APP_LIST_DIRECTION",
     )
     val reverseAppListDirection: Boolean = false,
+
+    @Setting(
+        title = "Avoid Camera Cutout",
+        description = "Recommended for Bottom Search Bar Placement. Reserves space at the top of results, preventing punch-hole cameras from obscuring items",
+        category = General::class,
+        type = Toggle::class,
+        dependsOn = "searchBarPlacement",
+        key = "AVOID_CAMERA_BOTTOM_SEARCH",
+    )
+    val avoidCameraBottomSearch: Boolean = false,
+
+    @Setting(
+        title = "Show Scrollbar",
+        description = "Show a scroll indicator on the right side of the app drawer",
+        category = General::class,
+        type = Toggle::class,
+        key = "SHOW_SCROLLBAR",
+    )
+    val showScrollbar: Boolean = false,
 
     @Setting(
         title = "Search Type",
