@@ -86,7 +86,7 @@ data class AppSettings(
 
     @Setting(
         title = "Invert Search Results Order",
-        description = "Recommended for Bottom Search Bar Placement. Best match appears furthest from the search bar instead of nearest",
+        description = "Recommended for Bottom Search Bar Placement. Best matches appear at the bottom instead of the top.",
         category = General::class,
         type = Toggle::class,
         key = "INVERT_SEARCH_RESULTS_ORDER",
@@ -95,7 +95,7 @@ data class AppSettings(
 
     @Setting(
         title = "Reverse App List Direction",
-        description = "Recommended for Bottom Search Bar Placement. Full unfiltered app list renders bottom-to-top",
+        description = "Full unfiltered app list renders bottom-to-top.",
         category = General::class,
         type = Toggle::class,
         key = "REVERSE_APP_LIST_DIRECTION",

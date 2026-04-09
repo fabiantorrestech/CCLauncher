@@ -308,11 +308,14 @@ fun AppDrawerScreen(
         }
     }
 
-    val shouldReverseLayout = when {
-        isBottomSearch -> true
-        searchQuery.isEmpty() && reverseAppList -> true
-        else -> false
-    }
+    // Bottom search naturally reverses (A's nearest the search bar).
+    // reverseAppList flips that default in both placements via XOR:
+    //   bottom=true,  reverseAppList=false → true  (A's at bottom — default)
+    //   bottom=true,  reverseAppList=true  → false (A's at top    — toggled)
+    //   bottom=false, reverseAppList=false → false (A's at top    — default)
+    //   bottom=false, reverseAppList=true  → true  (A's at bottom — toggled)
+    // Search results never use reverse layout (they rely on content ordering alone).
+    val shouldReverseLayout = searchQuery.isEmpty() && (isBottomSearch != reverseAppList)
 
     val displayList = if (invertSearchResults && searchQuery.isNotEmpty()) {
         appsToShow.reversed()
@@ -337,7 +340,7 @@ fun AppDrawerScreen(
                 }
             )
             .statusBarsPadding()
-            .then(if (isBottomSearch) Modifier.imePadding() else Modifier)
+            .imePadding()
     ) {
         if (selectionMode) {
             TopAppBar(
@@ -405,26 +408,33 @@ fun AppDrawerScreen(
                     }
                 }
                 else -> {
-                    Box(
-                        modifier = if (isBottomSearch) {
-                            // Don't give the box a fixed height — let it wrap its content so
-                            // align(BottomStart) actually pins a short list just above the search bar.
-                            Modifier
-                                .align(Alignment.BottomStart)
-                                .fillMaxWidth()
-                        } else {
-                            Modifier.fillMaxSize()
-                        }
-                    ) {
+                    // Outer box always fills the full available space so that Modifier.align()
+                    // on the inner box has a proper, fully-sized Box scope to work against.
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = if (isBottomSearch) {
+                                // heightIn on the *box* (not the LazyColumn) ensures fillMaxSize
+                                // on the LazyColumn expands the box to exactly the capped height,
+                                // so align(BottomStart) pins the list just above the search bar.
+                                // When avoidCutout is on, the cap is 48 dp short of the full
+                                // height, which leaves a transparent gap at the TOP of the screen
+                                // (near the punch-hole camera) — never at the bottom.
+                                Modifier
+                                    .align(Alignment.BottomStart)
+                                    .fillMaxWidth()
+                                    .heightIn(max = maxListHeight)
+                            } else {
+                                Modifier.fillMaxSize()
+                            }
+                        ) {
                         LazyColumn(
                             state = scrollState,
                             reverseLayout = shouldReverseLayout,
-                            modifier = if (isBottomSearch) {
-                                // Grow up to the full available height but never expand the box past it.
-                                Modifier.fillMaxWidth().heightIn(max = maxListHeight)
-                            } else {
-                                Modifier.fillMaxSize()
-                            },
+                            // Bottom search: fillMaxWidth only — the LazyColumn sizes to its
+                            // content height (short results stay compact near the search bar)
+                            // while still growing to fill the Box's heightIn cap for long lists.
+                            // fillMaxSize would force all results to the top of a tall container.
+                            modifier = if (isBottomSearch) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(itemSpacing)
                         ) {
                             items(
@@ -477,7 +487,8 @@ fun AppDrawerScreen(
                                 modifier = Modifier.align(Alignment.TopEnd)
                             )
                         }
-                    }
+                        } // inner Box
+                    } // outer Box
                 }
             }
         }
