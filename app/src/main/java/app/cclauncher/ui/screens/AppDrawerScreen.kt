@@ -13,8 +13,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -200,15 +204,48 @@ fun AppDrawerScreen(
 
     val scrollState = rememberLazyListState()
 
+    val isBottomSearch = settings.searchBarPlacement == Constants.SearchBarPlacement.BOTTOM
+    val invertSearchResults = settings.invertSearchResultsOrder
+    val reverseAppList = settings.reverseAppListDirection
+
+    val appsToShow = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
+
+    val showLabelsInList = if (settings.showAppNamesInSearchAfter > 0) {
+        searchQuery.length >= settings.showAppNamesInSearchAfter
+    } else {
+        settings.showAppNames
+    }
+
+    LaunchedEffect(searchQuery) {
+        hasAutoSelected = false
+    }
+
+    LaunchedEffect(appsToShow, settings.autoOpenFilteredApp, searchQuery) {
+        if (
+            searchQuery.isNotEmpty() &&
+            appsToShow.size == 1 &&
+            settings.autoOpenFilteredApp &&
+            !hasAutoSelected
+        ) {
+            handleAppClick(appsToShow[0])
+        }
+    }
+
+    LaunchedEffect(appsToShow, settings.searchSortOrder) {
+        if (settings.searchSortOrder == Constants.SortOrder.RECENT_FIRST) {
+            delay(150)
+            scrollState.animateScrollToItem(0)
+        }
+    }
+
     LaunchedEffect(searchQuery, scrollState) {
-        // Scroll to top when search query is cleared, if not already at top
-        if (searchQuery.isEmpty() && (scrollState.firstVisibleItemIndex != 0 || scrollState.firstVisibleItemScrollOffset != 0) ) {
+        if (searchQuery.isEmpty() && (scrollState.firstVisibleItemIndex != 0 || scrollState.firstVisibleItemScrollOffset != 0)) {
             scrollState.scrollToItem(0)
         }
     }
 
     // Keyboard and scroll interaction logic
-    LaunchedEffect(scrollState, keyboardController, focusManager, focusRequester, isSearchFocused) {
+    LaunchedEffect(scrollState, keyboardController, focusManager, focusRequester, isSearchFocused, isBottomSearch) {
         var previousIndex = scrollState.firstVisibleItemIndex
         var previousOffset = scrollState.firstVisibleItemScrollOffset
 
@@ -222,20 +259,28 @@ fun AppDrawerScreen(
             if (isScrolling) {
                 val actualScrollHappened = currentIndex != previousIndex || currentOffset != previousOffset
                 if (actualScrollHappened) {
-                    // Determine scroll direction: positive for down, negative for up
-                    val verticalScrollDelta: Int = if (currentIndex > previousIndex) 1 // Major scroll down
-                    else if (currentIndex < previousIndex) -1 // Major scroll up
-                    else currentOffset - previousOffset // Minor scroll in same item
+                    val verticalScrollDelta: Int = if (currentIndex > previousIndex) 1
+                    else if (currentIndex < previousIndex) -1
+                    else currentOffset - previousOffset
 
-                    if (verticalScrollDelta > 0) { // User scrolled DOWN (content moved UP)
-                        if (isSearchFocused) {
-                            focusManager.clearFocus() // Will trigger onFocusStateChanged(false)
+                    if (isBottomSearch) {
+                        // Bottom search: scrolling away from search bar (up, negative delta) hides keyboard
+                        if (verticalScrollDelta < 0) {
+                            if (isSearchFocused) { focusManager.clearFocus() }
+                            keyboardController?.hide()
+                        } else {
+                            if (currentIndex == 0 && currentOffset == 0) {
+                                if (!isSearchFocused) { focusRequester.requestFocus() }
+                            }
                         }
-                        keyboardController?.hide()
-                    } else { // User scrolled up
-                        if (currentIndex == 0 && currentOffset == 0) { // Reached the very top of the list
-                            if (!isSearchFocused) {
-                                focusRequester.requestFocus() // Will trigger onFocusStateChanged(true) & show keyboard
+                    } else {
+                        // Top search: scrolling away from search bar (down, positive delta) hides keyboard
+                        if (verticalScrollDelta > 0) {
+                            if (isSearchFocused) { focusManager.clearFocus() }
+                            keyboardController?.hide()
+                        } else {
+                            if (currentIndex == 0 && currentOffset == 0) {
+                                if (!isSearchFocused) { focusRequester.requestFocus() }
                             }
                         }
                     }
@@ -246,22 +291,36 @@ fun AppDrawerScreen(
         }
     }
 
+    val shouldReverseLayout = when {
+        isBottomSearch -> true
+        searchQuery.isEmpty() && reverseAppList -> true
+        else -> false
+    }
+
+    val displayList = if (invertSearchResults && searchQuery.isNotEmpty()) {
+        appsToShow.reversed()
+    } else {
+        appsToShow
+    }
+
+    val privateSpaceState by viewModel.privateSpaceState.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .detectSwipeGestures(
                 sensitivity = settings.gestureSensitivity,
-                onSwipeDown = { // General swipe down (anywhere) to trigger onSwipeDown action (e.g., go home)
+                onSwipeDown = {
                     onSwipeDown()
                 },
-                onSwipeUp = { // Swipe up when at the very top of the list to trigger onSwipeDown action
+                onSwipeUp = {
                     if (scrollState.firstVisibleItemIndex == 0 && scrollState.firstVisibleItemScrollOffset == 0) {
                         onSwipeDown()
                     }
-                    // If not at the top, LazyColumn handles the swipe for its own scrolling.
                 }
             )
             .statusBarsPadding()
+            .then(if (isBottomSearch) Modifier.imePadding() else Modifier)
     ) {
         if (selectionMode) {
             TopAppBar(
@@ -270,143 +329,146 @@ fun AppDrawerScreen(
             )
         }
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            AppDrawerSearch(
-                searchQuery = searchQuery,
-                onSearchChanged = { query -> searchQuery = query },
-                modifier = Modifier.focusRequester(focusRequester).weight(1f),
-                onEnterPressed = {
-                    val appsToOpen =
-                        if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
-                    if (appsToOpen.isNotEmpty()) handleAppClick(appsToOpen[0])
-                    // Keyboard is hidden by AppDrawerSearch's onSearch action
-                },
-                onFocusStateChanged = { focused ->
-                    isSearchFocused = focused
-                    // Keyboard visibility is handled by onFocusChanged in AppDrawerSearch for focus gain,
-                    // and by scroll logic or IME actions for focus loss/hide.
-                }
-            )
-
-            if (viewModel.isPrivateSpaceSupported) {
-                if (viewModel.privateSpaceState.collectAsState().value != MainViewModel.PrivateSpaceState.NotSetUp) {
-
+        if (!isBottomSearch) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppDrawerSearch(
+                    searchQuery = searchQuery,
+                    onSearchChanged = { query -> searchQuery = query },
+                    modifier = Modifier.focusRequester(focusRequester).weight(1f),
+                    onEnterPressed = {
+                        val appsToOpen = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
+                        if (appsToOpen.isNotEmpty()) handleAppClick(appsToOpen[0])
+                    },
+                    onFocusStateChanged = { focused -> isSearchFocused = focused }
+                )
+                if (viewModel.isPrivateSpaceSupported &&
+                    privateSpaceState != MainViewModel.PrivateSpaceState.NotSetUp) {
                     Spacer(modifier = Modifier.width(8.dp))
                     PrivateSpaceToggle(viewModel)
                 }
             }
         }
 
-        val appsToShow = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
-
-        val showLabelsInList = if (settings.showAppNamesInSearchAfter > 0) {
-            searchQuery.length >= settings.showAppNamesInSearchAfter
-        } else {
-            settings.showAppNames
-        }
-
         Log.d("AppRename", "Renamed apps: ${settings.renamedApps}")
 
-        LaunchedEffect(searchQuery) {
-            hasAutoSelected = false
-        }
-
-        LaunchedEffect(appsToShow, settings.autoOpenFilteredApp, searchQuery) {
-            if (
-                searchQuery.isNotEmpty() &&
-                appsToShow.size == 1 &&
-                settings.autoOpenFilteredApp &&
-                !hasAutoSelected
-            ) {
-                handleAppClick(appsToShow[0])
-            }
-        }
-
-        LaunchedEffect(appsToShow, settings.searchSortOrder) {
-            if (settings.searchSortOrder == Constants.SortOrder.RECENT_FIRST) {
-                delay(150)
-                scrollState.animateScrollToItem(0)
-            }
-        }
-
-        when {
-            uiState.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
-            uiState.error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Error: ${uiState.error}") }
-            uiState.apps.isEmpty() && searchQuery.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No apps found") }
-            uiState.filteredApps.isEmpty() && searchQuery.isNotEmpty() -> {
-                Box(Modifier.fillMaxSize(), Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("No apps found matching \"$searchQuery\"", color = MaterialTheme.colorScheme.onBackground)
-                        if (settings.showWebSearchOption) {
-                            Button(
-                                onClick = {
-                                    if (searchQuery.startsWith("!")) {
-                                        context.openSearch(Constants.URL_DUCK_SEARCH + searchQuery.substring(1).replace(" ", "%20"))
-                                    } else {
-                                        context.openSearch(searchQuery.trim())
-                                    }
-                                },
-                                modifier = Modifier.padding(top = 16.dp)
-                            ) {
-                                Text("Search Web")
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            val maxListHeight = maxHeight
+            when {
+                uiState.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                uiState.error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Error: ${uiState.error}") }
+                uiState.apps.isEmpty() && searchQuery.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No apps found") }
+                uiState.filteredApps.isEmpty() && searchQuery.isNotEmpty() -> {
+                    Box(Modifier.fillMaxSize(), Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("No apps found matching \"$searchQuery\"", color = MaterialTheme.colorScheme.onBackground)
+                            if (settings.showWebSearchOption) {
+                                Button(
+                                    onClick = {
+                                        if (searchQuery.startsWith("!")) {
+                                            context.openSearch(Constants.URL_DUCK_SEARCH + searchQuery.substring(1).replace(" ", "%20"))
+                                        } else {
+                                            context.openSearch(searchQuery.trim())
+                                        }
+                                    },
+                                    modifier = Modifier.padding(top = 16.dp)
+                                ) {
+                                    Text("Search Web")
+                                }
                             }
                         }
                     }
                 }
-            }
-            else -> {
-                LazyColumn(
-                    state = scrollState,
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
-                ) {
-                    items(
-                        items = appsToShow,
-                        key = { app -> app.getKey() }
-                    ) { app ->
-                        val customTextColor = if (settings.useCustomTextColor && settings.textColor != 0) {
-                            Color(settings.textColor)
+                else -> {
+                    LazyColumn(
+                        state = scrollState,
+                        reverseLayout = shouldReverseLayout,
+                        modifier = if (isBottomSearch) {
+                            // heightIn(max) lets the list wrap to content height when results are few,
+                            // then align(BottomStart) anchors it just above the search bar.
+                            // For large lists the height clamps to maxListHeight, filling the pane.
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = maxListHeight)
+                                .align(Alignment.BottomStart)
                         } else {
-                            null
-                        }
+                            Modifier.fillMaxSize()
+                        },
+                        verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                    ) {
+                        items(
+                            items = displayList,
+                            key = { app -> app.getKey() }
+                        ) { app ->
+                            val customTextColor = if (settings.useCustomTextColor && settings.textColor != 0) {
+                                Color(settings.textColor)
+                            } else {
+                                null
+                            }
 
-                        AppListItem(
-                            appLabel = app.appLabel,
-                            appIcon = if (shouldShowIcons) app.appIcon else null,
-                            showIcon = shouldShowIcons,
-                            showLabel = showLabelsInList,
-                            iconCornerRadius = settings.iconCornerRadius.dp,
-                            fontScale = searchResultsFontSize,
-                            fontWeight = fontWeight,
-                            textColor = customTextColor,
-                            onClick = {
-                                if (selectionMode || settings.appDrawerTapToOpen) {
-                                    handleAppClick(app)
-                                }
-                            },
-                            onLongClick = {
-                                if (settings.appDrawerLongPressEnabled && !selectionMode) {
-                                    selectedApp = app
-                                    showContextMenu = true
-                                }
-                            },
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = null,
-                                fadeOutSpec = null,
-                                placementSpec = AnimationConfig.listItemAnimationSpec
-                            ),
-                            trailing = if (viewModel.isPrivateSpaceSupported && viewModel.isAppInPrivateSpace(app)) {
-                                { PrivateSpaceIndicator(true) }
-                            } else null
-                        )
+                            AppListItem(
+                                appLabel = app.appLabel,
+                                appIcon = if (shouldShowIcons) app.appIcon else null,
+                                showIcon = shouldShowIcons,
+                                showLabel = showLabelsInList,
+                                iconCornerRadius = settings.iconCornerRadius.dp,
+                                fontScale = searchResultsFontSize,
+                                fontWeight = fontWeight,
+                                textColor = customTextColor,
+                                onClick = {
+                                    if (selectionMode || settings.appDrawerTapToOpen) {
+                                        handleAppClick(app)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (settings.appDrawerLongPressEnabled && !selectionMode) {
+                                        selectedApp = app
+                                        showContextMenu = true
+                                    }
+                                },
+                                modifier = Modifier.animateItem(
+                                    fadeInSpec = null,
+                                    fadeOutSpec = null,
+                                    placementSpec = AnimationConfig.listItemAnimationSpec
+                                ),
+                                trailing = if (viewModel.isPrivateSpaceSupported && viewModel.isAppInPrivateSpace(app)) {
+                                    { PrivateSpaceIndicator(true) }
+                                } else null
+                            )
+                        }
                     }
+                }
+            }
+        }
+
+        if (isBottomSearch) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppDrawerSearch(
+                    searchQuery = searchQuery,
+                    onSearchChanged = { query -> searchQuery = query },
+                    modifier = Modifier.focusRequester(focusRequester).weight(1f),
+                    onEnterPressed = {
+                        val appsToOpen = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
+                        if (appsToOpen.isNotEmpty()) handleAppClick(appsToOpen[0])
+                    },
+                    onFocusStateChanged = { focused -> isSearchFocused = focused }
+                )
+                if (viewModel.isPrivateSpaceSupported &&
+                    privateSpaceState != MainViewModel.PrivateSpaceState.NotSetUp) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    PrivateSpaceToggle(viewModel)
                 }
             }
         }

@@ -76,6 +76,11 @@ object Constants {
         const val STARTS_WITH = 2
         const val EXACT = 3
     }
+
+    object SearchBarPlacement {
+        const val TOP = 0
+        const val BOTTOM = 1
+    }
 }
 
 object WidgetConstants {

@@ -75,6 +75,34 @@ data class AppSettings(
     val autoOpenFilteredApp: Boolean = true,
 
     @Setting(
+        title = "Search Bar Placement",
+        description = "Where the search bar sits in the app drawer",
+        category = General::class,
+        type = Dropdown::class,
+        options = ["Top", "Bottom"],
+        key = "SEARCH_BAR_PLACEMENT",
+    )
+    val searchBarPlacement: Int = Constants.SearchBarPlacement.TOP,
+
+    @Setting(
+        title = "Invert Search Results Order",
+        description = "Best match appears furthest from the search bar instead of nearest",
+        category = General::class,
+        type = Toggle::class,
+        key = "INVERT_SEARCH_RESULTS_ORDER",
+    )
+    val invertSearchResultsOrder: Boolean = false,
+
+    @Setting(
+        title = "Reverse App List Direction",
+        description = "Full unfiltered app list renders bottom-to-top",
+        category = General::class,
+        type = Toggle::class,
+        key = "REVERSE_APP_LIST_DIRECTION",
+    )
+    val reverseAppListDirection: Boolean = false,
+
+    @Setting(
         title = "Search Type",
         category = General::class,
         type = Dropdown::class,
