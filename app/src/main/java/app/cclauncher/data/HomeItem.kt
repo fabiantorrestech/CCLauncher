@@ -3,6 +3,7 @@ package app.cclauncher.data
 import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
+import java.util.UUID
 
 @Serializable
 @Immutable
@@ -47,7 +48,7 @@ sealed class HomeItem {
         val gridRows: Int = Constants.GridSize.DEFAULT_ROWS,
         val gridColumns: Int = Constants.GridSize.DEFAULT_COLUMNS,
         val appTextSize: Float = 1.0f,
-        override val id: String = "folder_${System.currentTimeMillis()}",
+        override val id: String = "folder_${UUID.randomUUID()}",
         override val page: Int = 0,
         override val row: Int,
         override val column: Int,

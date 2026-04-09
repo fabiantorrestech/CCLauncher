@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -89,6 +90,7 @@ fun HomeScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val homeLayoutState by viewModel.homeLayoutState.collectAsState()
+    val homeFolders by remember { derivedStateOf { homeLayoutState.items.filterIsInstance<HomeItem.Folder>() } }
     val settings by settingsViewModel.settingsState.collectAsState()
     val currentPage by viewModel.currentPage.collectAsState()
 
@@ -274,7 +276,6 @@ fun HomeScreen(
         showAppContextMenu?.let { appItem ->
             val currentItem = homeLayoutState.items.find { it.id == appItem.id } as? HomeItem.App
             currentItem?.let {
-                val homeFolders = homeLayoutState.items.filterIsInstance<HomeItem.Folder>()
                 HomeAppContextMenu(
                     appItem = it,
                     pageCount = homeLayoutState.pageCount,
