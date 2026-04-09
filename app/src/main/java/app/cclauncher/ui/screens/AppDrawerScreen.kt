@@ -61,6 +61,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -119,6 +120,8 @@ fun AppDrawerScreen(
     val context = LocalContext.current
     val uiState by viewModel.appDrawerState.collectAsState()
     val settings by settingsViewModel.settingsState.collectAsState()
+    val homeLayoutState by viewModel.homeLayoutState.collectAsState()
+    val homeFolders by remember { derivedStateOf { homeLayoutState.items.filterIsInstance<HomeItem.Folder>() } }
 
     var searchQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -570,9 +573,7 @@ fun AppDrawerScreen(
                             openAppInfo(context, app)
                             dismissMenu()
                         }
-                        val homeLayoutShortcut by viewModel.homeLayoutState.collectAsState()
-                        val foldersForShortcut = homeLayoutShortcut.items.filterIsInstance<HomeItem.Folder>()
-                        if (foldersForShortcut.isNotEmpty()) {
+                        if (homeFolders.isNotEmpty()) {
                             ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
                                 showFolderPickerForApp = app
                                 dismissMenu()
@@ -602,9 +603,7 @@ fun AppDrawerScreen(
                             viewModel.addAppToHomeScreen(app)
                             dismissMenu()
                         }
-                        val homeLayout by viewModel.homeLayoutState.collectAsState()
-                        val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
-                        if (folders.isNotEmpty()) {
+                        if (homeFolders.isNotEmpty()) {
                             ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
                                 showFolderPickerForApp = app
                                 dismissMenu()
@@ -676,14 +675,12 @@ fun AppDrawerScreen(
 
     if (showFolderPickerForApp != null) {
         val app = showFolderPickerForApp ?: return
-        val homeLayout by viewModel.homeLayoutState.collectAsState()
-        val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
         AlertDialog(
             onDismissRequest = { showFolderPickerForApp = null },
             title = { Text("Add to Folder") },
             text = {
                 androidx.compose.foundation.lazy.LazyColumn {
-                    items(folders, key = { it.id }) { folder ->
+                    items(homeFolders, key = { it.id }) { folder ->
                         androidx.compose.material3.ListItem(
                             headlineContent = { Text(folder.title) },
                             supportingContent = { Text("${folder.apps.size} apps") },
