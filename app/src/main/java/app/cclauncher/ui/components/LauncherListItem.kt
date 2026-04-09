@@ -4,6 +4,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -44,6 +45,7 @@ fun LauncherListItem(
     verticalPadding: Dp = 12.dp,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
+    labelPrefix: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
     Row(
@@ -75,17 +77,36 @@ fun LauncherListItem(
         }
 
         if (showLabel) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale,
-                    fontWeight = fontWeight
-                ),
-                color = textColor ?: MaterialTheme.colorScheme.onSurface, // Use custom color
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            if (labelPrefix != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    labelPrefix()
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale,
+                            fontWeight = fontWeight
+                        ),
+                        color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale,
+                        fontWeight = fontWeight
+                    ),
+                    color = textColor ?: MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
 
         // Trailing content (badges, indicators, etc.)
@@ -110,6 +131,7 @@ fun AppListItem(
     textColor: Color? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    labelPrefix: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
     LauncherListItem(
@@ -125,6 +147,7 @@ fun AppListItem(
         onClick = onClick,
         onLongClick = onLongClick,
         modifier = modifier,
+        labelPrefix = labelPrefix,
         trailing = trailing
     )
 }

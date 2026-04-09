@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.AdsClick
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
@@ -472,6 +473,16 @@ fun AppDrawerScreen(
                                         fadeOutSpec = null,
                                         placementSpec = AnimationConfig.listItemAnimationSpec
                                     ),
+                                    labelPrefix = if (app.isSystemShortcut && settings.showShortcutIcon) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Default.Language,
+                                                contentDescription = null,
+                                                tint = customTextColor ?: MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                        }
+                                    } else null,
                                     trailing = if (viewModel.isPrivateSpaceSupported && viewModel.isAppInPrivateSpace(app)) {
                                         { PrivateSpaceIndicator(true) }
                                     } else null

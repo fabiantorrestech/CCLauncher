@@ -47,6 +47,15 @@ data class AppSettings(
     )
     val showPinnedShortcuts: Boolean = true,
 
+    @Setting(
+        title = "Show Web Icon for Shortcuts",
+        description = "Show a small web icon next to browser shortcuts and PWAs.",
+        category = General::class,
+        type = Toggle::class,
+        key = "SHOW_SHORTCUT_ICON",
+    )
+    val showShortcutIcon: Boolean = true,
+
     @Persisted(key = "SHOW_APP_ICONS")
     val showAppIcons: Boolean = true,
 

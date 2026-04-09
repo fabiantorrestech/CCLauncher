@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +14,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -151,18 +155,44 @@ fun HomeAppItem(
         }
 
         if (showName) {
-            Text(
-                text = app.appLabel,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontSize = effectiveFontSize,
-                    fontWeight = fontWeight
-                ),
-                color = textColor,
-                textAlign = textAlign,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
-            )
+            if (app.isSystemShortcut && settings.showShortcutIcon) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Language,
+                        contentDescription = null,
+                        tint = textColor,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Text(
+                        text = app.appLabel,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = effectiveFontSize,
+                            fontWeight = fontWeight
+                        ),
+                        color = textColor,
+                        textAlign = textAlign,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            } else {
+                Text(
+                    text = app.appLabel,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = effectiveFontSize,
+                        fontWeight = fontWeight
+                    ),
+                    color = textColor,
+                    textAlign = textAlign,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
