@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.background
@@ -63,6 +62,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,10 +76,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -372,13 +374,23 @@ fun AppDrawerScreen(
             }
         }
 
-        Log.d("AppRename", "Renamed apps: ${settings.renamedApps}")
+        LaunchedEffect(settings.renamedApps) {
+            Log.d("AppRename", "Renamed apps: ${settings.renamedApps}")
+        }
 
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+        var containerHeightPx by remember { mutableIntStateOf(0) }
+        val density = LocalDensity.current
+        Box(modifier = Modifier
+            .weight(1f)
+            .onSizeChanged { containerHeightPx = it.height }
+        ) {
             // When avoiding the camera cutout, reduce the ceiling so the list can't
             // grow tall enough to put items behind the punch-hole camera.
             // 48.dp covers virtually all modern phone cutouts.
-            val maxListHeight = if (isBottomSearch && avoidCutout) maxHeight - 48.dp else maxHeight
+            val maxListHeight = with(density) {
+                val fullHeight = containerHeightPx.toDp()
+                if (isBottomSearch && avoidCutout) (fullHeight - 48.dp).coerceAtLeast(0.dp) else fullHeight
+            }
             when {
                 uiState.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
                 uiState.error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Error: ${uiState.error}") }
