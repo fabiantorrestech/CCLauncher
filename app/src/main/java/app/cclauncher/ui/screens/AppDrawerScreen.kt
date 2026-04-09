@@ -316,10 +316,8 @@ fun AppDrawerScreen(
     // Search results never use reverse layout (they rely on content ordering alone).
     val shouldReverseLayout = searchQuery.isEmpty() && (isBottomSearch != reverseAppList)
 
-    val displayList = if (invertSearchResults && searchQuery.isNotEmpty()) {
-        appsToShow.reversed()
-    } else {
-        appsToShow
+    val displayList = remember(appsToShow, invertSearchResults, searchQuery) {
+        if (invertSearchResults && searchQuery.isNotEmpty()) appsToShow.reversed() else appsToShow
     }
 
     val privateSpaceState by viewModel.privateSpaceState.collectAsState()

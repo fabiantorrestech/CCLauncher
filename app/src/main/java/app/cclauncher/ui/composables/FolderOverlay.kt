@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -37,7 +39,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.constraintlayout.compose.ConstraintLayout
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
 import app.cclauncher.helper.showToast
@@ -234,29 +235,22 @@ private fun FolderGridContent(
         val cellWidth = usableWidth / folder.gridColumns
         val cellHeight = usableHeight / folder.gridRows
 
-        ConstraintLayout(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = horizontalPadding, vertical = verticalPadding)
         ) {
-            val refs = folder.apps.associate { it.hashCode() to createRef() }
-
             folder.apps.forEach { app ->
                 val isMoving = movingApp == app
-                val ref = refs[app.hashCode()] ?: return@forEach
 
                 val itemMod = Modifier
-                    .constrainAs(ref) {
-                        top.linkTo(parent.top, margin = cellHeight * app.row)
-                        start.linkTo(parent.start, margin = cellWidth * app.column)
-                        width = androidx.constraintlayout.compose.Dimension.value(cellWidth * app.columnSpan)
-                        height = androidx.constraintlayout.compose.Dimension.value(cellHeight * app.rowSpan)
-                    }
+                    .offset(x = cellWidth * app.column, y = cellHeight * app.row)
+                    .size(width = cellWidth * app.columnSpan, height = cellHeight * app.rowSpan)
                     .then(
                         if (isMoving)
                             Modifier
                                 .alpha(0.6f)
-                                .border(2.dp, Color.White, androidx.compose.foundation.shape.RoundedCornerShape(4.dp))
+                                .border(2.dp, Color.White, RoundedCornerShape(4.dp))
                         else Modifier
                     )
 
