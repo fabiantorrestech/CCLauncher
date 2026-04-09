@@ -39,7 +39,51 @@ sealed class HomeItem {
         override val rowSpan: Int,
         override val columnSpan: Int,
     ) : HomeItem()
+
+    @Serializable(with = HomeItemFolderSerializer::class)
+    data class Folder(
+        val title: String,
+        val apps: List<FolderApp> = emptyList(),
+        val gridRows: Int = Constants.GridSize.DEFAULT_ROWS,
+        val gridColumns: Int = Constants.GridSize.DEFAULT_COLUMNS,
+        val appTextSize: Float = 1.0f,
+        override val id: String = "folder_${System.currentTimeMillis()}",
+        override val page: Int = 0,
+        override val row: Int,
+        override val column: Int,
+        override val rowSpan: Int = 1,
+        override val columnSpan: Int = 1,
+    ) : HomeItem()
 }
+
+/** A lightweight app reference stored inside a folder. Position fields place it in the folder's internal grid. */
+@Serializable
+data class FolderApp(
+    val appLabel: String,
+    val appPackage: String,
+    val activityClassName: String? = null,
+    val userString: String = "",
+    val row: Int = 0,
+    val column: Int = 0,
+    val rowSpan: Int = 1,
+    val columnSpan: Int = 1,
+) {
+    fun toAppModel() = AppModel(
+        appLabel = appLabel,
+        appPackage = appPackage,
+        activityClassName = activityClassName?.takeIf { it.isNotBlank() },
+        userString = userString,
+    )
+}
+
+fun AppModel.toFolderApp(row: Int, column: Int) = FolderApp(
+    appLabel = appLabel,
+    appPackage = appPackage,
+    activityClassName = activityClassName,
+    userString = userString,
+    row = row,
+    column = column,
+)
 
 @Serializable
 data class HomeLayout(

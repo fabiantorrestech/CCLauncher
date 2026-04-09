@@ -91,6 +91,7 @@ import app.cclauncher.MainViewModel
 import app.cclauncher.data.AppShortcut
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
+import app.cclauncher.data.HomeItem
 import app.cclauncher.helper.openAppInfo
 import app.cclauncher.helper.openSearch
 import app.cclauncher.ui.BackHandler
@@ -155,6 +156,7 @@ fun AppDrawerScreen(
 
     var selectedApp by remember { mutableStateOf<AppModel?>(null) }
     var showContextMenu by remember { mutableStateOf(false) }
+    var showFolderPickerForApp by remember { mutableStateOf<AppModel?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -558,6 +560,14 @@ fun AppDrawerScreen(
                             viewModel.addAppToHomeScreen(app)
                             dismissMenu()
                         }
+                        val homeLayout by viewModel.homeLayoutState.collectAsState()
+                        val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
+                        if (folders.isNotEmpty()) {
+                            ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
+                                showFolderPickerForApp = app
+                                dismissMenu()
+                            }
+                        }
                         if (supportsShortcuts && !selectionMode) {
                             ContextMenuItem("Shortcuts", Icons.Default.SubdirectoryArrowRight) {
                                 shortcutsDialogApp = app
@@ -620,6 +630,35 @@ fun AppDrawerScreen(
             )
         }
 
+    }
+
+    if (showFolderPickerForApp != null) {
+        val app = showFolderPickerForApp ?: return
+        val homeLayout by viewModel.homeLayoutState.collectAsState()
+        val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
+        AlertDialog(
+            onDismissRequest = { showFolderPickerForApp = null },
+            title = { Text("Add to Folder") },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(folders, key = { it.id }) { folder ->
+                        androidx.compose.material3.ListItem(
+                            headlineContent = { Text(folder.title) },
+                            supportingContent = { Text("${folder.apps.size} apps") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.addAppToFolder(folder.id, app)
+                                    showFolderPickerForApp = null
+                                }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFolderPickerForApp = null }) { Text("Cancel") }
+            }
+        )
     }
 
     if (supportsShortcuts && shortcutsDialogApp != null) {

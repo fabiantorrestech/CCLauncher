@@ -37,6 +37,7 @@ fun ResizeDialog(
     val title = when (item) {
         is HomeItem.App -> "Resize App"
         is HomeItem.Widget -> "Resize Widget"
+        is HomeItem.Folder -> "Resize Folder"
     }
 
     BaseDialog(

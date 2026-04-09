@@ -28,8 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import app.cclauncher.data.FolderApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -147,11 +149,14 @@ fun HomeScreen(
 
     var showAppContextMenu by remember { mutableStateOf<HomeItem.App?>(null) }
     var showWidgetContextMenu by remember { mutableStateOf<HomeItem.Widget?>(null) }
+    var showFolderContextMenu by remember { mutableStateOf<HomeItem.Folder?>(null) }
     var resizeDialogItem by remember { mutableStateOf<HomeItem?>(null) }
+    var openFolderId by remember { mutableStateOf<String?>(null) }
 
     // Simple movement tracking - no overlay needed
     var widgetBeingMoved by remember { mutableStateOf<HomeItem.Widget?>(null) }
     var appBeingMoved by remember { mutableStateOf<HomeItem.App?>(null) }
+    var folderBeingMoved by remember { mutableStateOf<HomeItem.Folder?>(null) }
 
     val focusRequester = remember { FocusRequester() }
 
@@ -206,11 +211,14 @@ fun HomeScreen(
                 appWidgetHost = appWidgetHost,
                 widgetBeingMoved = widgetBeingMoved,
                 appBeingMoved = appBeingMoved,
+                folderBeingMoved = folderBeingMoved,
                 onAppClick = { item ->
                     viewModel.launchApp(item.appModel.withResolvedUser(context))
                 },
                 onAppLongPress = { item -> showAppContextMenu = item },
                 onWidgetLongPress = { item -> showWidgetContextMenu = item },
+                onFolderClick = { folder -> openFolderId = folder.id },
+                onFolderLongPress = { folder -> showFolderContextMenu = folder },
                 onEmptyLongPress = { onNavigateToSettings() },
                 onDoubleTap = {
                     if (settings.doubleTapToLock) {
@@ -232,11 +240,16 @@ fun HomeScreen(
                             viewModel.moveApp(item, row, col)
                             appBeingMoved = null
                         }
+                        is HomeItem.Folder -> {
+                            viewModel.moveFolder(item, row, col)
+                            folderBeingMoved = null
+                        }
                     }
                 },
                 onCancelMovement = {
                     widgetBeingMoved = null
                     appBeingMoved = null
+                    folderBeingMoved = null
                 }
             )
         }
@@ -319,6 +332,39 @@ fun HomeScreen(
             }
         }
 
+        // Folder context menu
+        showFolderContextMenu?.let { folderItem ->
+            val currentFolder = homeLayoutState.items.find { it.id == folderItem.id } as? HomeItem.Folder
+            currentFolder?.let {
+                FolderContextMenu(
+                    folderItem = it,
+                    pageCount = homeLayoutState.pageCount,
+                    onDismiss = { showFolderContextMenu = null },
+                    onRemove = { folder ->
+                        viewModel.removeFolder(folder)
+                        showFolderContextMenu = null
+                    },
+                    onResize = { folder ->
+                        resizeDialogItem = folder
+                        showFolderContextMenu = null
+                    },
+                    onMove = { folder ->
+                        folderBeingMoved = folder
+                        showFolderContextMenu = null
+                        context.showToast("Tap where you want to move the folder")
+                    },
+                    onMoveToPage = { folder, targetPage ->
+                        viewModel.moveItemToPage(folder, targetPage)
+                        showFolderContextMenu = null
+                    },
+                    onRename = { folder, newTitle ->
+                        viewModel.renameFolder(folder.id, newTitle)
+                        showFolderContextMenu = null
+                    }
+                )
+            }
+        }
+
         // Resize dialog
         ResizeDialog(
             item = resizeDialogItem,
@@ -346,9 +392,37 @@ fun HomeScreen(
                     is HomeItem.App -> {
                         viewModel.resizeApp(item, newRowSpan, newColSpan)
                     }
+                    is HomeItem.Folder -> {
+                        viewModel.resizeFolder(item, newRowSpan, newColSpan)
+                    }
                 }
             }
         )
+
+        // Folder overlay — shown on top of everything when a folder is open
+        openFolderId?.let { fid ->
+            val openFolder = homeLayoutState.items.filterIsInstance<HomeItem.Folder>().find { it.id == fid }
+            if (openFolder != null) {
+                app.cclauncher.ui.composables.FolderOverlay(
+                    folder = openFolder,
+                    settings = settings,
+                    onDismiss = { openFolderId = null },
+                    onLaunchApp = { folderApp ->
+                        viewModel.launchApp(folderApp.toAppModel())
+                        openFolderId = null
+                    },
+                    onMoveApp = { folderApp, newRow, newCol ->
+                        viewModel.moveFolderApp(fid, folderApp, newRow, newCol)
+                    },
+                    onRemoveApp = { folderApp ->
+                        viewModel.removeAppFromFolder(fid, folderApp)
+                    },
+                    onResizeApp = { folderApp, newRowSpan, newColSpan ->
+                        viewModel.resizeFolderApp(fid, folderApp, newRowSpan, newColSpan)
+                    }
+                )
+            }
+        }
     }
 }
 
@@ -360,9 +434,12 @@ private fun HomeScreenPage(
     appWidgetHost: AppWidgetHost,
     widgetBeingMoved: HomeItem.Widget?,
     appBeingMoved: HomeItem.App?,
+    folderBeingMoved: HomeItem.Folder?,
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
     onWidgetLongPress: (HomeItem.Widget) -> Unit,
+    onFolderClick: (HomeItem.Folder) -> Unit,
+    onFolderLongPress: (HomeItem.Folder) -> Unit,
     onEmptyLongPress: () -> Unit,
     onDoubleTap: () -> Unit,
     onSwipeUp: () -> Unit,
@@ -377,7 +454,7 @@ private fun HomeScreenPage(
         homeLayout.itemsForPage(page)
     }
 
-    val isMoving = widgetBeingMoved != null || appBeingMoved != null
+    val isMoving = widgetBeingMoved != null || appBeingMoved != null || folderBeingMoved != null
 
     Box(
         modifier = Modifier
@@ -389,7 +466,7 @@ private fun HomeScreenPage(
                 onSwipeLeft = onSwipeLeft,
                 onSwipeRight = onSwipeRight
             )
-            .pointerInput(widgetBeingMoved, appBeingMoved) {
+            .pointerInput(widgetBeingMoved, appBeingMoved, folderBeingMoved) {
                 detectTapGestures(
                     onDoubleTap = { onDoubleTap() },
                     onLongPress = { offset ->
@@ -401,6 +478,12 @@ private fun HomeScreenPage(
                         val widget = findWidgetAtPosition(homeLayout, offset, size, page)
                         if (widget != null) {
                             onWidgetLongPress(widget)
+                            return@detectTapGestures
+                        }
+
+                        val folder = findFolderAtPosition(homeLayout, offset, size, page)
+                        if (folder != null) {
+                            onFolderLongPress(folder)
                             return@detectTapGestures
                         }
 
@@ -416,8 +499,13 @@ private fun HomeScreenPage(
                         if (isMoving) {
                             val gridPosition = calculateGridPosition(offset, homeLayout, size)
                             if (gridPosition != null) {
-                                val item: HomeItem? = widgetBeingMoved ?: appBeingMoved
+                                val item: HomeItem? = widgetBeingMoved ?: appBeingMoved ?: folderBeingMoved
                                 item?.let { onMoveToPosition(it, gridPosition.first, gridPosition.second) }
+                            }
+                        } else {
+                            val folder = findFolderAtPosition(homeLayout, offset, size, page)
+                            if (folder != null) {
+                                onFolderClick(folder)
                             }
                         }
                     }
@@ -431,9 +519,12 @@ private fun HomeScreenPage(
             appWidgetHost = appWidgetHost,
             widgetBeingMoved = widgetBeingMoved,
             appBeingMoved = appBeingMoved,
+            folderBeingMoved = folderBeingMoved,
             onAppClick = onAppClick,
             onAppLongPress = onAppLongPress,
-            onWidgetLongPress = onWidgetLongPress
+            onWidgetLongPress = onWidgetLongPress,
+            onFolderClick = onFolderClick,
+            onFolderLongPress = onFolderLongPress,
         )
     }
 }
@@ -447,9 +538,12 @@ private fun HomeScreenContent(
     appWidgetHost: AppWidgetHost,
     widgetBeingMoved: HomeItem.Widget?,
     appBeingMoved: HomeItem.App?,
+    folderBeingMoved: HomeItem.Folder?,
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
-    onWidgetLongPress: (HomeItem.Widget) -> Unit
+    onWidgetLongPress: (HomeItem.Widget) -> Unit,
+    onFolderClick: (HomeItem.Folder) -> Unit,
+    onFolderLongPress: (HomeItem.Folder) -> Unit,
 ) {
     val density = LocalDensity.current
     val context = LocalContext.current
@@ -553,6 +647,25 @@ private fun HomeScreenContent(
                             Box(itemModifier)
                             Log.w("HomeScreen", "Provider not found for widget ID ${item.appWidgetId}")
                         }
+                    }
+
+                    is HomeItem.Folder -> {
+                        val isBeingMoved = folderBeingMoved?.id == item.id
+                        val folderModifier = if (isBeingMoved) {
+                            itemModifier
+                                .padding(2.dp)
+                                .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                .alpha(0.7f)
+                        } else {
+                            itemModifier.padding(2.dp)
+                        }
+                        app.cclauncher.ui.composables.HomeFolderItem(
+                            folder = item,
+                            settings = settings,
+                            modifier = folderModifier,
+                            onClick = { onFolderClick(item) },
+                            onLongClick = { onFolderLongPress(item) },
+                        )
                     }
                 }
             }
@@ -802,6 +915,23 @@ private fun findWidgetAtPosition(
     }
 }
 
+private fun findFolderAtPosition(
+    homeLayout: HomeLayout,
+    position: Offset,
+    size: IntSize,
+    page: Int
+): HomeItem.Folder? {
+    val cellWidth = size.width.toFloat() / homeLayout.columns
+    val cellHeight = size.height.toFloat() / homeLayout.rows
+    val column = (position.x / cellWidth).toInt()
+    val row = (position.y / cellHeight).toInt()
+
+    return homeLayout.itemsForPage(page).filterIsInstance<HomeItem.Folder>().find { folder ->
+        row >= folder.row && row < folder.row + folder.rowSpan &&
+                column >= folder.column && column < folder.column + folder.columnSpan
+    }
+}
+
 private fun calculateGridPosition(
     position: Offset,
     homeLayout: HomeLayout,
@@ -815,4 +945,74 @@ private fun calculateGridPosition(
     return if (row in 0 until homeLayout.rows && column in 0 until homeLayout.columns) {
         Pair(row, column)
     } else null
+}
+
+@Composable
+fun FolderContextMenu(
+    folderItem: HomeItem.Folder,
+    pageCount: Int = 1,
+    onDismiss: () -> Unit,
+    onRemove: (HomeItem.Folder) -> Unit,
+    onResize: (HomeItem.Folder) -> Unit,
+    onMove: (HomeItem.Folder) -> Unit,
+    onMoveToPage: (HomeItem.Folder, Int) -> Unit,
+    onRename: (HomeItem.Folder, String) -> Unit,
+) {
+    var showPageSelector by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameValue by remember { mutableStateOf(folderItem.title) }
+
+    if (showPageSelector) {
+        PageSelectorDialog(
+            currentItemPage = folderItem.page,
+            pageCount = pageCount,
+            onDismiss = { showPageSelector = false },
+            onPageSelected = { targetPage ->
+                onMoveToPage(folderItem, targetPage)
+                showPageSelector = false
+                onDismiss()
+            }
+        )
+    } else if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Rename Folder") },
+            text = {
+                androidx.compose.material3.OutlinedTextField(
+                    value = renameValue,
+                    onValueChange = { renameValue = it },
+                    singleLine = true,
+                    label = { Text("Folder name") }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRename(folderItem, renameValue)
+                    showRenameDialog = false
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
+            }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Folder Options") },
+            text = {
+                Column {
+                    DropdownMenuItem(text = { Text("Move") }, onClick = { onMove(folderItem); onDismiss() })
+                    if (pageCount > 1 || pageCount < MAX_PAGES) {
+                        DropdownMenuItem(text = { Text("Move to page...") }, onClick = { showPageSelector = true })
+                    }
+                    DropdownMenuItem(text = { Text("Resize") }, onClick = { onResize(folderItem); onDismiss() })
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
+                    DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemove(folderItem); onDismiss() })
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismiss) { Text("Close") }
+            }
+        )
+    }
 }

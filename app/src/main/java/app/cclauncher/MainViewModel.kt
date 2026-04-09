@@ -360,6 +360,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     item.copy(appModel = updatedAppModel)
                 }
                 is HomeItem.Widget -> item
+                is HomeItem.Folder -> item
             }
         }
 
@@ -411,6 +412,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     item.copy(appModel = updatedAppModel)
                 }
                 is HomeItem.Widget -> item
+                is HomeItem.Folder -> item
             }
         }
 
@@ -440,6 +442,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                             column = newPosition?.second ?: 0
                         )
                         is HomeItem.Widget -> item.copy(
+                            row = newPosition?.first ?: 0,
+                            column = newPosition?.second ?: 0
+                        )
+                        is HomeItem.Folder -> item.copy(
                             row = newPosition?.first ?: 0,
                             column = newPosition?.second ?: 0
                         )
@@ -546,6 +552,207 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val newItems = currentLayout.items.filterNot { it.id == appItem.id }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = newItems))
         }
+    }
+
+    // ─── Folder operations ────────────────────────────────────────────────────
+
+    fun getFolders(): List<HomeItem.Folder> =
+        _homeLayoutState.value.items.filterIsInstance<HomeItem.Folder>()
+
+    fun addFolderToHomeScreen(title: String, targetPage: Int? = null) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val page = targetPage ?: _currentPage.value
+            val nextPos = findNextAvailableGridPosition(currentLayout, 1, 1, page)
+            if (nextPos != null) {
+                val folder = HomeItem.Folder(
+                    title = title.ifBlank { "Folder" },
+                    page = page,
+                    row = nextPos.first,
+                    column = nextPos.second,
+                )
+                settingsRepository.saveHomeLayout(currentLayout.copy(items = currentLayout.items + folder))
+            } else {
+                if (page < currentLayout.pageCount - 1) {
+                    addFolderToHomeScreen(title, page + 1)
+                } else if (currentLayout.pageCount < MAX_PAGES) {
+                    val newLayout = currentLayout.copy(pageCount = currentLayout.pageCount + 1)
+                    settingsRepository.saveHomeLayout(newLayout)
+                    addFolderToHomeScreen(title, currentLayout.pageCount)
+                } else {
+                    snackbarManager.show("No space available on any home screen page.")
+                }
+            }
+        }
+    }
+
+    fun addAppToFolder(folderId: String, appModel: AppModel) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val pos = findNextAvailablePositionInFolder(folder) ?: run {
+                snackbarManager.show("No space available in this folder.")
+                return@launch
+            }
+            val folderApp = appModel.toFolderApp(pos.first, pos.second)
+            val updatedFolder = folder.copy(apps = folder.apps + folderApp)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+            snackbarManager.show("Added \"${appModel.appLabel}\" to \"${folder.title}\"")
+        }
+    }
+
+    fun removeAppFromFolder(folderId: String, folderApp: FolderApp) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(apps = folder.apps.filter { it != folderApp })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun moveFolderApp(folderId: String, folderApp: FolderApp, newRow: Int, newColumn: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            if (!validateFolderPlacement(folder, folderApp, newRow, newColumn, folderApp.rowSpan, folderApp.columnSpan)) {
+                snackbarManager.show("Cannot place app there.")
+                return@launch
+            }
+            val updatedApps = folder.apps.map {
+                if (it == folderApp) it.copy(row = newRow, column = newColumn) else it
+            }
+            val updatedFolder = folder.copy(apps = updatedApps)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun renameFolder(folderId: String, newTitle: String) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val updatedItems = currentLayout.items.map { item ->
+                if (item.id == folderId && item is HomeItem.Folder) item.copy(title = newTitle.ifBlank { "Folder" })
+                else item
+            }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun removeFolder(folderItem: HomeItem.Folder) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = currentLayout.items.filterNot { it.id == folderItem.id }))
+        }
+    }
+
+    fun moveFolder(folderItem: HomeItem.Folder, newRow: Int, newColumn: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            if (!validateAndReport(currentLayout, folderItem.id, folderItem.page, newRow, newColumn, folderItem.rowSpan, folderItem.columnSpan, "move folder")) return@launch
+            val updatedItems = currentLayout.items.map { item ->
+                if (item.id == folderItem.id && item is HomeItem.Folder) item.copy(row = newRow, column = newColumn) else item
+            }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun resizeFolder(folderItem: HomeItem.Folder, newRowSpan: Int, newColSpan: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            if (!validateAndReport(currentLayout, folderItem.id, folderItem.page, folderItem.row, folderItem.column, newRowSpan, newColSpan, "resize folder")) return@launch
+            val updatedItems = currentLayout.items.map { item ->
+                if (item.id == folderItem.id && item is HomeItem.Folder) item.copy(rowSpan = newRowSpan, columnSpan = newColSpan) else item
+            }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderGridSize(folderId: String, newRows: Int, newCols: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val clampedRows = newRows.coerceIn(Constants.GridSize.MIN_ROWS, Constants.GridSize.MAX_ROWS)
+            val clampedCols = newCols.coerceIn(Constants.GridSize.MIN_COLUMNS, Constants.GridSize.MAX_COLUMNS)
+
+            val validApps = folder.apps.filter { app ->
+                app.row + app.rowSpan <= clampedRows && app.column + app.columnSpan <= clampedCols
+            }
+            val outOfBoundsApps = folder.apps - validApps.toSet()
+            val relocatedApps = mutableListOf<FolderApp>()
+
+            for (app in outOfBoundsApps) {
+                val tempFolder = folder.copy(apps = validApps + relocatedApps, gridRows = clampedRows, gridColumns = clampedCols)
+                val pos = findNextAvailablePositionInFolder(tempFolder, app.columnSpan, app.rowSpan)
+                if (pos != null) {
+                    relocatedApps.add(app.copy(row = pos.first, column = pos.second))
+                } else {
+                    snackbarManager.show("Some apps could not fit in the new grid and were removed from the folder")
+                }
+            }
+
+            val updatedFolder = folder.copy(gridRows = clampedRows, gridColumns = clampedCols, apps = validApps + relocatedApps)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderTitle(folderId: String, newTitle: String) = renameFolder(folderId, newTitle)
+
+    fun updateFolderAppTextSize(folderId: String, textSize: Float) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(appTextSize = textSize)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun resizeFolderApp(folderId: String, folderApp: FolderApp, newRowSpan: Int, newColSpan: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            if (!validateFolderPlacement(folder, folderApp, folderApp.row, folderApp.column, newRowSpan, newColSpan)) {
+                snackbarManager.show("Cannot resize app there.")
+                return@launch
+            }
+            val updatedApp = folderApp.copy(rowSpan = newRowSpan, columnSpan = newColSpan)
+            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    private fun findNextAvailablePositionInFolder(folder: HomeItem.Folder, widthSpan: Int = 1, heightSpan: Int = 1): Pair<Int, Int>? {
+        val occupied = Array(folder.gridRows) { BooleanArray(folder.gridColumns) }
+        folder.apps.forEach { app ->
+            for (r in app.row until (app.row + app.rowSpan).coerceAtMost(folder.gridRows)) {
+                for (c in app.column until (app.column + app.columnSpan).coerceAtMost(folder.gridColumns)) {
+                    if (r >= 0 && c >= 0) occupied[r][c] = true
+                }
+            }
+        }
+        for (r in 0..folder.gridRows - heightSpan) {
+            for (c in 0..folder.gridColumns - widthSpan) {
+                if (isSpaceFreeInternal(occupied, r, c, widthSpan, heightSpan, folder.gridRows, folder.gridColumns)) {
+                    return Pair(r, c)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun validateFolderPlacement(folder: HomeItem.Folder, movingApp: FolderApp, newRow: Int, newCol: Int, rowSpan: Int, colSpan: Int): Boolean {
+        if (newRow < 0 || newCol < 0) return false
+        if (newRow + rowSpan > folder.gridRows || newCol + colSpan > folder.gridColumns) return false
+        val hasOverlap = folder.apps.any { app ->
+            if (app == movingApp) return@any false
+            !(newRow >= app.row + app.rowSpan || newRow + rowSpan <= app.row ||
+                newCol >= app.column + app.columnSpan || newCol + colSpan <= app.column)
+        }
+        return !hasOverlap
     }
 
     private fun getCellSizeDp(screenWidthDp: Int, screenHeightDp: Int, rows: Int, columns: Int): Pair<Float, Float> {
@@ -824,6 +1031,11 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                             column = nextPos.second
                         )
                         is HomeItem.Widget -> existingItem.copy(
+                            page = targetPage,
+                            row = nextPos.first,
+                            column = nextPos.second
+                        )
+                        is HomeItem.Folder -> existingItem.copy(
                             page = targetPage,
                             row = nextPos.first,
                             column = nextPos.second
@@ -1488,6 +1700,11 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                                         column = newPos.second
                                     )
                                     is HomeItem.Widget -> item.copy(
+                                        page = targetPage,
+                                        row = newPos.first,
+                                        column = newPos.second
+                                    )
+                                    is HomeItem.Folder -> item.copy(
                                         page = targetPage,
                                         row = newPos.first,
                                         column = newPos.second

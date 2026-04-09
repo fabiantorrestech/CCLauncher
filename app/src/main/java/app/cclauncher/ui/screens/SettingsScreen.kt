@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,8 +29,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -101,7 +104,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
     mainViewModel: MainViewModel = koinViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToHiddenApps: () -> Unit = {}
+    onNavigateToHiddenApps: () -> Unit = {},
+    onNavigateToFolderList: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val uiState by viewModel.settingsState.collectAsState()
@@ -120,6 +124,9 @@ fun SettingsScreen(
 
     var showPageWarningDialog by remember { mutableStateOf(false) }
     var pendingPageChange by remember { mutableStateOf<Int?>(null) }
+
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
 
 
     val pickFontLauncher = rememberLauncherForActivityResult(
@@ -450,6 +457,8 @@ fun SettingsScreen(
             for (category: KClass<*> in categories) {
                 val categoryFields = grouped[category].orEmpty()
                 if (categoryFields.isEmpty()) continue
+                // Folders is rendered manually below so the settings and actions appear together
+                if (category.simpleName == "Folders") continue
 
                 item(key = "cat_${category.qualifiedName ?: category.simpleName}") {
                     val title = (category.simpleName ?: "Settings")
@@ -736,6 +745,59 @@ fun SettingsScreen(
                 }
             }
 
+            item(key = "folders") {
+                val folderFields = grouped.entries.find { it.key.simpleName == "Folders" }?.value.orEmpty()
+                SettingsSection(title = "Folders") {
+                    folderFields.forEach { field ->
+                        val meta = field.meta ?: return@forEach
+                        val isEnabled = schema.isEnabled(uiState, field)
+                        when (meta.type) {
+                            Toggle::class -> {
+                                val value = (field.get(uiState) as? Boolean) ?: false
+                                SettingsToggle(
+                                    title = meta.title,
+                                    description = meta.description.takeIf { it.isNotEmpty() },
+                                    isChecked = value,
+                                    enabled = isEnabled,
+                                    onCheckedChange = { checked ->
+                                        coroutineScope.launch { viewModel.updateSetting(field.name, checked) }
+                                    }
+                                )
+                            }
+                            Slider::class -> {
+                                val v = field.get(uiState)
+                                val subtitle = when (v) {
+                                    is Float -> String.format(Locale.getDefault(), "%.1f", v)
+                                    is Int -> v.toString()
+                                    else -> ""
+                                }
+                                SettingsItem(
+                                    title = meta.title,
+                                    subtitle = subtitle,
+                                    description = meta.description.takeIf { it.isNotEmpty() },
+                                    enabled = isEnabled,
+                                    onClick = { currentField = field; showingDialog = "slider" }
+                                )
+                            }
+                            else -> {}
+                        }
+                    }
+                    SettingsAction(
+                        title = "Add Folder",
+                        description = "Create a new folder on your home screen",
+                        onClick = {
+                            newFolderName = ""
+                            showCreateFolderDialog = true
+                        }
+                    )
+                    SettingsAction(
+                        title = "Manage Folders",
+                        description = "View and configure existing folders",
+                        onClick = onNavigateToFolderList
+                    )
+                }
+            }
+
             item(key = "private_space_$refreshTrigger") {
                 SettingsSection(title = "Private Space") {
                     if (mainViewModel.isPrivateSpaceSupported) {
@@ -890,6 +952,30 @@ fun SettingsScreen(
                 showValidationDialog = false
                 pendingImportUri = null
                 validationResult = null
+            }
+        )
+    }
+
+    if (showCreateFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFolderDialog = false },
+            title = { Text("New Folder") },
+            text = {
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    label = { Text("Folder name") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    mainViewModel.addFolderToHomeScreen(newFolderName.ifBlank { "Folder" })
+                    showCreateFolderDialog = false
+                }) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateFolderDialog = false }) { Text("Cancel") }
             }
         )
     }

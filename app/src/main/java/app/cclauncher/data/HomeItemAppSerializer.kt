@@ -1,6 +1,7 @@
 package app.cclauncher.data
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
 import kotlinx.serialization.descriptors.element
@@ -181,6 +182,88 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
             column = column,
             rowSpan = rowSpan,
             columnSpan = columnSpan
+        )
+    }
+}
+
+object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
+    private val appsSerializer = ListSerializer(FolderApp.serializer())
+
+    override val descriptor: SerialDescriptor = buildClassSerialDescriptor("HomeItem.Folder") {
+        element<String>("id")
+        element<Int>("page")
+        element<Int>("row")
+        element<Int>("column")
+        element<Int>("rowSpan")
+        element<Int>("columnSpan")
+        element<String>("title")
+        element<Int>("gridRows")
+        element<Int>("gridColumns")
+        element("apps", appsSerializer.descriptor)
+        element<Float>("appTextSize")
+    }
+
+    override fun serialize(encoder: Encoder, value: HomeItem.Folder) {
+        encoder.encodeStructure(descriptor) {
+            encodeStringElement(descriptor, 0, value.id)
+            encodeIntElement(descriptor, 1, value.page)
+            encodeIntElement(descriptor, 2, value.row)
+            encodeIntElement(descriptor, 3, value.column)
+            encodeIntElement(descriptor, 4, value.rowSpan)
+            encodeIntElement(descriptor, 5, value.columnSpan)
+            encodeStringElement(descriptor, 6, value.title)
+            encodeIntElement(descriptor, 7, value.gridRows)
+            encodeIntElement(descriptor, 8, value.gridColumns)
+            encodeSerializableElement(descriptor, 9, appsSerializer, value.apps)
+            encodeFloatElement(descriptor, 10, value.appTextSize)
+        }
+    }
+
+    override fun deserialize(decoder: Decoder): HomeItem.Folder {
+        var id = "folder_${System.currentTimeMillis()}"
+        var page = 0
+        var row = 0
+        var column = 0
+        var rowSpan = 1
+        var columnSpan = 1
+        var title = "Folder"
+        var gridRows = Constants.GridSize.DEFAULT_ROWS
+        var gridColumns = Constants.GridSize.DEFAULT_COLUMNS
+        var apps = emptyList<FolderApp>()
+        var appTextSize = 1.0f
+
+        decoder.decodeStructure(descriptor) {
+            while (true) {
+                when (val index = decodeElementIndex(descriptor)) {
+                    0 -> id = decodeStringElement(descriptor, index)
+                    1 -> page = decodeIntElement(descriptor, index)
+                    2 -> row = decodeIntElement(descriptor, index)
+                    3 -> column = decodeIntElement(descriptor, index)
+                    4 -> rowSpan = decodeIntElement(descriptor, index)
+                    5 -> columnSpan = decodeIntElement(descriptor, index)
+                    6 -> title = decodeStringElement(descriptor, index)
+                    7 -> gridRows = decodeIntElement(descriptor, index)
+                    8 -> gridColumns = decodeIntElement(descriptor, index)
+                    9 -> apps = decodeSerializableElement(descriptor, index, appsSerializer)
+                    10 -> appTextSize = decodeFloatElement(descriptor, index)
+                    CompositeDecoder.DECODE_DONE -> break
+                    else -> { /* skip unknown fields for forward compat */ }
+                }
+            }
+        }
+
+        return HomeItem.Folder(
+            id = id,
+            page = page,
+            row = row,
+            column = column,
+            rowSpan = rowSpan,
+            columnSpan = columnSpan,
+            title = title,
+            gridRows = gridRows,
+            gridColumns = gridColumns,
+            apps = apps,
+            appTextSize = appTextSize,
         )
     }
 }

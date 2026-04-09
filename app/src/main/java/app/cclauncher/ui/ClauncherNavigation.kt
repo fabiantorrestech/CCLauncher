@@ -42,6 +42,8 @@ import app.cclauncher.helper.showToast
 import app.cclauncher.ui.components.snackbar.LauncherSnackbarHost
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.screens.AppDrawerScreen
+import app.cclauncher.ui.screens.FolderDetailScreen
+import app.cclauncher.ui.screens.FolderListScreen
 import app.cclauncher.ui.screens.HiddenAppsScreen
 import app.cclauncher.ui.screens.HomeScreen
 import app.cclauncher.ui.screens.SettingsScreen
@@ -78,6 +80,7 @@ fun CLauncherNavigation(
     val isOnHome = backStack.size == 1 && backStack.lastOrNull() == homeDestination
 
     var currentSelectionType by remember { mutableStateOf<AppSelectionType?>(null) }
+    var selectedFolderId by remember { mutableStateOf<String?>(null) }
     var didSyncHome by remember { mutableStateOf(false) }
 
     fun popToHome(clearSelection: Boolean = true) {
@@ -261,7 +264,8 @@ fun CLauncherNavigation(
                             navigateTo(LauncherDestination.Settings)
                         }
                         pushOnTop(LauncherDestination.HiddenApps)
-                    }
+                    },
+                    onNavigateToFolderList = { pushOnTop(LauncherDestination.FolderList) }
                 )
             }
 
@@ -286,8 +290,39 @@ fun CLauncherNavigation(
                     },
                     onDismiss = { popToHome() }
                 )
+            }
+
+            entry<LauncherDestination.FolderList>(metadata = settingsTransitions) {
+                FolderListScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = {
+                        if (backStack.lastOrNull() == LauncherDestination.FolderList) {
+                            backStack.removeAt(backStack.lastIndex)
+                        } else {
+                            navigateTo(LauncherDestination.Settings)
+                        }
+                    },
+                    onNavigateToFolder = { folderId ->
+                        selectedFolderId = folderId
+                        pushOnTop(LauncherDestination.FolderDetail)
+                    }
+                )
+            }
+
+            entry<LauncherDestination.FolderDetail>(metadata = settingsTransitions) {
+                FolderDetailScreen(
+                    viewModel = viewModel,
+                    folderId = selectedFolderId ?: "",
+                    onNavigateBack = {
+                        if (backStack.lastOrNull() == LauncherDestination.FolderDetail) {
+                            backStack.removeAt(backStack.lastIndex)
+                        } else {
+                            navigateTo(LauncherDestination.Settings)
+                        }
+                    }
+                )
+            }
         }
-    }
 
     Scaffold(
         snackbarHost = {
@@ -363,4 +398,10 @@ sealed interface LauncherDestination : NavKey {
 
     @Serializable
     data object WidgetPicker : LauncherDestination
+
+    @Serializable
+    data object FolderList : LauncherDestination
+
+    @Serializable
+    data object FolderDetail : LauncherDestination
 }

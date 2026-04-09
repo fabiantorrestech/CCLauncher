@@ -534,6 +534,27 @@ data class AppSettings(
     @Serialized
     val swipeRightApp: AppPreference = AppPreference(label = "Not set"),
 
+    @Setting(
+        title = "Show Folder Icon",
+        description = "Show a small folder icon next to folder names on the home screen",
+        category = Folders::class,
+        type = Toggle::class,
+        key = "SHOW_FOLDER_ICON",
+    )
+    val showFolderIcon: Boolean = true,
+
+    @Setting(
+        title = "Folder Background Opacity",
+        description = "Adjust the darkness of the folder overlay background (0.1 = nearly transparent, 0.9 = nearly opaque)",
+        category = Folders::class,
+        type = Slider::class,
+        min = 0.1f,
+        max = 0.9f,
+        step = 0.1f,
+        key = "FOLDER_BACKGROUND_OPACITY",
+    )
+    val folderBackgroundOpacity: Float = 0.6f,
+
     @Persisted(key = "FIRST_OPEN") val firstOpen: Boolean = true,
     @Persisted(key = "FIRST_OPEN_TIME") val firstOpenTime: Long = 0L,
     @Persisted(key = "FIRST_SETTINGS_OPEN") val firstSettingsOpen: Boolean = true,
@@ -587,6 +608,7 @@ data class AppKeyMigration(
 @CategoryDefinition(order = 2) object Layout
 @CategoryDefinition(order = 3) object Gestures
 @CategoryDefinition(order = 4) object System
+@CategoryDefinition(order = 5) object Folders
 
 object FontPicker : SettingTypeMarker
 object AppPicker : SettingTypeMarker
