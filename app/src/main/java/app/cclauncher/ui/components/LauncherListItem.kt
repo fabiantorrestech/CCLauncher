@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -43,11 +44,14 @@ fun LauncherListItem(
     textColor: Color? = null,
     horizontalPadding: Dp = 20.dp,
     verticalPadding: Dp = 12.dp,
+    isRightAligned: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     labelPrefix: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
+    val textAlign = if (isRightAligned) TextAlign.End else TextAlign.Start
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -57,9 +61,16 @@ fun LauncherListItem(
                 onLongClick = onLongClick ?: {}
             )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (isRightAligned) Arrangement.End else Arrangement.Start
     ) {
-        if (showIcon && icon != null) {
+        // When right-aligned, trailing content comes first (leftmost)
+        if (isRightAligned) {
+            trailing?.invoke()
+        }
+
+        // Icon before text (left-aligned) or after text (right-aligned)
+        if (!isRightAligned && showIcon && icon != null) {
             Surface(
                 shape = RoundedCornerShape(iconCornerRadius),
                 modifier = Modifier.padding(end = 16.dp),
@@ -71,8 +82,7 @@ fun LauncherListItem(
                     modifier = Modifier.size(iconSize)
                 )
             }
-        } else if (showIcon) {
-            // Spacer for alignment when icon is expected but not available
+        } else if (!isRightAligned && showIcon) {
             Spacer(modifier = Modifier.size(iconSize).padding(end = 16.dp))
         }
 
@@ -80,6 +90,7 @@ fun LauncherListItem(
             if (labelPrefix != null) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (isRightAligned) Arrangement.End else Arrangement.Start,
                     modifier = Modifier.weight(1f)
                 ) {
                     labelPrefix()
@@ -92,6 +103,7 @@ fun LauncherListItem(
                         color = textColor ?: MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        textAlign = textAlign,
                     )
                 }
             } else {
@@ -104,13 +116,33 @@ fun LauncherListItem(
                     color = textColor ?: MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    textAlign = textAlign,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // Trailing content (badges, indicators, etc.)
-        trailing?.invoke()
+        // Icon after text when right-aligned
+        if (isRightAligned && showIcon && icon != null) {
+            Surface(
+                shape = RoundedCornerShape(iconCornerRadius),
+                modifier = Modifier.padding(start = 16.dp),
+                color = Color.Transparent
+            ) {
+                Image(
+                    bitmap = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        } else if (isRightAligned && showIcon) {
+            Spacer(modifier = Modifier.size(iconSize).padding(start = 16.dp))
+        }
+
+        // Trailing content on the right (left-aligned mode)
+        if (!isRightAligned) {
+            trailing?.invoke()
+        }
     }
 }
 
@@ -129,6 +161,7 @@ fun AppListItem(
     fontScale: Float = 1.0f,
     fontWeight: FontWeight = FontWeight.Normal,
     textColor: Color? = null,
+    isRightAligned: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     labelPrefix: @Composable (() -> Unit)? = null,
@@ -144,6 +177,7 @@ fun AppListItem(
         fontScale = fontScale,
         fontWeight = fontWeight,
         textColor = textColor,
+        isRightAligned = isRightAligned,
         onClick = onClick,
         onLongClick = onLongClick,
         modifier = modifier,

@@ -131,6 +131,25 @@ data class AppSettings(
     val showScrollbar: Boolean = false,
 
     @Setting(
+        title = "Scrollbar on Left",
+        description = "Place the scrollbar on the left side of the app drawer",
+        category = General::class,
+        type = Toggle::class,
+        key = "SCROLLBAR_ON_LEFT",
+    )
+    val scrollbarOnLeft: Boolean = false,
+
+    @Setting(
+        title = "App Drawer Alignment",
+        description = "Align app names and search results to the left or right side",
+        category = General::class,
+        type = Dropdown::class,
+        options = ["Left", "Right"],
+        key = "APP_DRAWER_ALIGNMENT",
+    )
+    val appDrawerAlignment: Int = Constants.AppDrawerAlignment.LEFT,
+
+    @Setting(
         title = "Search Type",
         category = General::class,
         type = Dropdown::class,

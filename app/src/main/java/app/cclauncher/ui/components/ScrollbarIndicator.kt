@@ -32,6 +32,7 @@ fun ScrollbarIndicator(
     listState: LazyListState,
     totalItems: Int,
     reverseLayout: Boolean = false,
+    alignToStart: Boolean = false,
     modifier: Modifier = Modifier,
     thumbWidthDp: Dp = 6.dp,
     minThumbHeightDp: Dp = 40.dp,
@@ -110,7 +111,7 @@ fun ScrollbarIndicator(
                     scope.launch { listState.scrollToItem(targetIndex) }
                 }
             },
-        contentAlignment = Alignment.TopEnd
+        contentAlignment = if (alignToStart) Alignment.TopStart else Alignment.TopEnd
     ) {
         Box(
             modifier = Modifier

@@ -224,6 +224,8 @@ fun AppDrawerScreen(
     val reverseAppList = settings.reverseAppListDirection
     val avoidCutout = settings.avoidCameraBottomSearch
     val showScrollbar = settings.showScrollbar
+    val scrollbarOnLeft = settings.scrollbarOnLeft
+    val isRightAligned = settings.appDrawerAlignment == Constants.AppDrawerAlignment.RIGHT
 
     val appsToShow = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
 
@@ -435,6 +437,13 @@ fun AppDrawerScreen(
                                 Modifier.fillMaxSize()
                             }
                         ) {
+                        // Reserve space on the scrollbar side so content doesn't sit
+                        // flush against the scrollbar thumb / touch target.
+                        val scrollbarPadding = if (showScrollbar) {
+                            if (scrollbarOnLeft) Modifier.padding(start = 12.dp)
+                            else Modifier.padding(end = 12.dp)
+                        } else Modifier
+
                         LazyColumn(
                             state = scrollState,
                             reverseLayout = shouldReverseLayout,
@@ -442,7 +451,8 @@ fun AppDrawerScreen(
                             // content height (short results stay compact near the search bar)
                             // while still growing to fill the Box's heightIn cap for long lists.
                             // fillMaxSize would force all results to the top of a tall container.
-                            modifier = if (isBottomSearch) Modifier.fillMaxWidth() else Modifier.fillMaxSize(),
+                            modifier = (if (isBottomSearch) Modifier.fillMaxWidth() else Modifier.fillMaxSize())
+                                .then(scrollbarPadding),
                             verticalArrangement = Arrangement.spacedBy(itemSpacing)
                         ) {
                             items(
@@ -464,6 +474,7 @@ fun AppDrawerScreen(
                                     fontScale = searchResultsFontSize,
                                     fontWeight = fontWeight,
                                     textColor = customTextColor,
+                                    isRightAligned = isRightAligned,
                                     onClick = {
                                         if (selectionMode || settings.appDrawerTapToOpen) {
                                             handleAppClick(app)
@@ -502,7 +513,10 @@ fun AppDrawerScreen(
                                 listState = scrollState,
                                 totalItems = displayList.size,
                                 reverseLayout = shouldReverseLayout,
-                                modifier = Modifier.align(Alignment.TopEnd)
+                                alignToStart = scrollbarOnLeft,
+                                modifier = Modifier.align(
+                                    if (scrollbarOnLeft) Alignment.TopStart else Alignment.TopEnd
+                                )
                             )
                         }
                         } // inner Box

@@ -81,6 +81,11 @@ object Constants {
         const val TOP = 0
         const val BOTTOM = 1
     }
+
+    object AppDrawerAlignment {
+        const val LEFT = 0
+        const val RIGHT = 1
+    }
 }
 
 object WidgetConstants {
