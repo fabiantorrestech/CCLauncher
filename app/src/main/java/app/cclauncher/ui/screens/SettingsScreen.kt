@@ -124,6 +124,28 @@ private sealed class SettingsTab(val title: String) {
     data object Backup : SettingsTab("Backup")
 }
 
+/**
+ * A manually-defined (non-schema) item that should appear in search results.
+ * [onClick] is stable for the lifetime of the composable since it captures only
+ * coroutineScope/viewModel references and MutableState setters.
+ */
+private data class ManualSearchItem(
+    val key: String,
+    val title: String,
+    val description: String,
+    val category: String,
+    val onClick: () -> Unit,
+)
+
+/** Union type for the unified search results list. */
+private sealed interface Either {
+    val category: String
+    data class Field(val field: SettingField<AppSettings, *>, override val category: String) : Either
+    data class Manual(val item: ManualSearchItem) : Either {
+        override val category get() = item.category
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -251,6 +273,97 @@ fun SettingsScreen(
             }
         }
         result
+    }
+
+    // Manual (non-schema) items that also need to be discoverable via search.
+    // Lambdas here only capture stable references (coroutineScope, viewModel, MutableState setters).
+    val manualSearchItems = remember {
+        listOf(
+            ManualSearchItem(
+                key = "add_widget",
+                title = "Add Widget",
+                description = "Add a widget to your home screen",
+                category = "Widgets",
+                onClick = { coroutineScope.launch { viewModel.emitEvent(UiEvent.NavigateToWidgetPicker) } }
+            ),
+            ManualSearchItem(
+                key = "add_folder",
+                title = "Add Folder",
+                description = "Create a new folder on your home screen",
+                category = "Folders",
+                onClick = { newFolderName = ""; showCreateFolderDialog = true }
+            ),
+            ManualSearchItem(
+                key = "manage_folders",
+                title = "Manage Folders",
+                description = "View and configure existing folders",
+                category = "Folders",
+                onClick = onNavigateToFolderList
+            ),
+            ManualSearchItem(
+                key = "private_space",
+                title = "Private Space",
+                description = "Set up or manage Android Private Space",
+                category = "Private Space",
+                onClick = { mainViewModel.openPrivateSpaceSettings() }
+            ),
+            ManualSearchItem(
+                key = "default_launcher",
+                title = "Set as Default Launcher",
+                description = "Set CCLauncher as your default launcher app",
+                category = "System",
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                }
+            ),
+            ManualSearchItem(
+                key = "hidden_apps",
+                title = "Hidden Apps",
+                description = "Manage apps hidden from the app drawer",
+                category = "System",
+                onClick = onNavigateToHiddenApps
+            ),
+            ManualSearchItem(
+                key = "app_info",
+                title = "App Info",
+                description = "Open CCLauncher's system app info page",
+                category = "System",
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    )
+                }
+            ),
+            ManualSearchItem(
+                key = "about",
+                title = "About CCLauncher",
+                description = "Version info and links",
+                category = "System",
+                onClick = {
+                    coroutineScope.launch { viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT)) }
+                }
+            ),
+            ManualSearchItem(
+                key = "export_settings",
+                title = "Export Settings",
+                description = "Save your settings to a backup file",
+                category = "Backup",
+                onClick = {
+                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+                    exportLauncher.launch("cclauncher_settings_$timestamp.json")
+                }
+            ),
+            ManualSearchItem(
+                key = "import_settings",
+                title = "Import Settings",
+                description = "Restore settings from a backup file",
+                category = "Backup",
+                onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+            ),
+        )
     }
 
     // ----- Shared callback for rendering a setting field's action (used by both pager and search) -----
@@ -582,13 +695,32 @@ fun SettingsScreen(
         if (isSearchActive) {
             // ----- Search results: flat filtered list -----
             val query = searchQuery.trim().lowercase()
-            val filteredFields = remember(query, searchableFields) {
-                if (query.isEmpty()) searchableFields
-                else searchableFields.filter { (field, _) ->
-                    val meta = field.meta ?: return@filter false
-                    meta.title.lowercase().contains(query) ||
-                        meta.description.lowercase().contains(query)
+
+            // Sealed type combining schema fields and manual items for uniform filtering/rendering.
+            val filteredResults: List<Either> = remember(query, searchableFields, manualSearchItems) {
+                val schemaMatches = if (query.isEmpty()) {
+                    searchableFields.map { (f, cat) -> Either.Field(f, cat) }
+                } else {
+                    searchableFields.mapNotNull { (field, categoryLabel) ->
+                        val meta = field.meta ?: return@mapNotNull null
+                        val hit = meta.title.lowercase().contains(query) ||
+                            meta.description.lowercase().contains(query) ||
+                            meta.options.any { it.lowercase().contains(query) } ||
+                            categoryLabel.lowercase().contains(query)
+                        if (hit) Either.Field(field, categoryLabel) else null
+                    }
                 }
+                val manualMatches = if (query.isEmpty()) {
+                    manualSearchItems.map { Either.Manual(it) }
+                } else {
+                    manualSearchItems.mapNotNull { item ->
+                        val hit = item.title.lowercase().contains(query) ||
+                            item.description.lowercase().contains(query) ||
+                            item.category.lowercase().contains(query)
+                        if (hit) Either.Manual(item) else null
+                    }
+                }
+                schemaMatches + manualMatches
             }
 
             LazyColumn(
@@ -596,7 +728,7 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
-                if (filteredFields.isEmpty()) {
+                if (filteredResults.isEmpty()) {
                     item {
                         Box(
                             modifier = Modifier
@@ -612,23 +744,32 @@ fun SettingsScreen(
                         }
                     }
                 } else {
-                    // Group filtered results by category for visual clarity
-                    val byCategory = filteredFields.groupBy { it.second }
-                    for ((categoryLabel, fields) in byCategory) {
+                    // Group by category, preserving schema-field order then manual-item order
+                    val byCategory = filteredResults.groupBy { it.category }
+                    for ((categoryLabel, results) in byCategory) {
                         item(key = "search_cat_$categoryLabel") {
                             SettingsSection(title = categoryLabel) {
-                                fields.forEach { (field, _) ->
-                                    key(field.name) {
-                                        SettingsFieldRenderer(
-                                            field = field,
-                                            uiState = uiState,
-                                            schema = schema,
-                                            coroutineScope = coroutineScope,
-                                            viewModel = viewModel,
-                                            context = context,
-                                            onShowDialog = onFieldAction,
-                                            onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
-                                        )
+                                results.forEach { entry ->
+                                    when (entry) {
+                                        is Either.Field -> key(entry.field.name) {
+                                            SettingsFieldRenderer(
+                                                field = entry.field,
+                                                uiState = uiState,
+                                                schema = schema,
+                                                coroutineScope = coroutineScope,
+                                                viewModel = viewModel,
+                                                context = context,
+                                                onShowDialog = onFieldAction,
+                                                onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                            )
+                                        }
+                                        is Either.Manual -> key(entry.item.key) {
+                                            SettingsItem(
+                                                title = entry.item.title,
+                                                description = entry.item.description.takeIf { it.isNotEmpty() },
+                                                onClick = entry.item.onClick,
+                                            )
+                                        }
                                     }
                                 }
                             }

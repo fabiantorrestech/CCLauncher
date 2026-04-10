@@ -273,15 +273,15 @@ data class AppSettings(
     val itemSpacing: Int = 1,
 
     @Setting(
-        title = "Search Results Use Home Font Size",
+        title = "Search Results Use Home Text Size",
         category = Appearance::class,
         type = Toggle::class,
-        description = "Use the same font size for search results as home screen"
+        description = "Use the same text size for search results as home screen"
     )
     val searchResultsUseHomeFont: Boolean = false,
 
     @Setting(
-        title = "Search Results Font Size",
+        title = "Search Results Text Size",
         category = Appearance::class,
         type = Slider::class,
         min = 0.5f,
@@ -461,7 +461,7 @@ data class AppSettings(
     val showIconsInPortrait: Boolean = false,
 
     @Setting(
-        title = "Home App Label Alignment",
+        title = "Home App Label Alignment (Default)",
         description = "Align app names on the home screen",
         category = Appearance::class,
         type = Dropdown::class,
