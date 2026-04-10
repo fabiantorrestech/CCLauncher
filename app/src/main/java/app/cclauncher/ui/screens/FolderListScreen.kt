@@ -10,19 +10,27 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -39,6 +47,40 @@ fun FolderListScreen(
     val homeLayout by viewModel.homeLayoutState.collectAsState()
     val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
 
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
+
+    if (showCreateDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showCreateDialog = false
+                newFolderName = ""
+            },
+            title = { Text("New Folder") },
+            text = {
+                OutlinedTextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    singleLine = true,
+                    label = { Text("Folder name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.addFolderToHomeScreen(newFolderName)
+                    showCreateDialog = false
+                    newFolderName = ""
+                }) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCreateDialog = false
+                    newFolderName = ""
+                }) { Text("Cancel") }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -47,8 +89,18 @@ fun FolderListScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
+                },
+                actions = {
+                    IconButton(onClick = { showCreateDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "New Folder")
+                    }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showCreateDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "New Folder")
+            }
         }
     ) { innerPadding ->
         if (folders.isEmpty()) {
@@ -69,7 +121,7 @@ fun FolderListScreen(
                         style = MaterialTheme.typography.bodyLarge,
                     )
                     Text(
-                        text = "Create one from the Folder Settings section.",
+                        text = "Tap + to create your first folder.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.padding(top = 4.dp, start = 24.dp, end = 24.dp),
