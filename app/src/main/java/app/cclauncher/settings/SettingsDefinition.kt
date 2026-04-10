@@ -135,6 +135,7 @@ data class AppSettings(
         description = "Place the scrollbar on the left side of the app drawer",
         category = General::class,
         type = Toggle::class,
+        dependsOn = "showScrollbar",
         key = "SCROLLBAR_ON_LEFT",
     )
     val scrollbarOnLeft: Boolean = false,

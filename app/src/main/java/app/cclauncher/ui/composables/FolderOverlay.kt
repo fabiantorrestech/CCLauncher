@@ -14,8 +14,12 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -87,20 +91,37 @@ fun FolderOverlay(
                     .fillMaxSize()
                     .padding(12.dp),
             ) {
-                // Folder title
-                Text(
-                    text = folder.title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
-                    color = when {
-                        folder.titleTextColor != 0 -> Color(folder.titleTextColor)
-                        settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
-                        else -> MaterialTheme.colorScheme.onSurface
-                    },
-                    textAlign = TextAlign.Center,
+                // Folder title + close button
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp),
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = folder.title,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                        color = when {
+                            folder.titleTextColor != 0 -> Color(folder.titleTextColor)
+                            settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
+                            else -> MaterialTheme.colorScheme.onSurface
+                        },
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 40.dp),
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close folder",
+                            tint = Color.White,
+                        )
+                    }
+                }
 
                 // Folder grid
                 Box(
