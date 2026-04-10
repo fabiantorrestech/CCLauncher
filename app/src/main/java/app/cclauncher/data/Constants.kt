@@ -49,6 +49,14 @@ object Constants {
         const val APP = 3
         const val NEXT_PAGE = 4
         const val PREVIOUS_PAGE = 5
+        const val OPEN_FOLDER = 6
+    }
+
+    object CornerPosition {
+        const val TOP_LEFT = 0
+        const val TOP_RIGHT = 1
+        const val BOTTOM_LEFT = 2
+        const val BOTTOM_RIGHT = 3
     }
 
     object GridSize {

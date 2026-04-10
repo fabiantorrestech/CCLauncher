@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -30,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -77,6 +79,7 @@ fun FolderDetailScreen(
     var showAppPicker by remember { mutableStateOf(false) }
     var appPickerSearch by remember { mutableStateOf("") }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -112,6 +115,28 @@ fun FolderDetailScreen(
                         }
                     }
                 )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Show on Home Screen", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Hide the tile on the home grid without deleting the folder",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = folder.showOnHome,
+                        onCheckedChange = { viewModel.setFolderShowOnHome(folderId, it) },
+                    )
+                }
                 Spacer(Modifier.height(16.dp))
             }
 
@@ -232,7 +257,15 @@ fun FolderDetailScreen(
                 }
             }
 
-            item { Spacer(Modifier.height(32.dp)) }
+            item {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Delete Folder") }
+                Spacer(Modifier.height(32.dp))
+            }
         }
     }
 
@@ -244,6 +277,26 @@ fun FolderDetailScreen(
             onColorSelected = { color ->
                 viewModel.updateFolderTitleColor(folderId, color)
                 showColorPicker = false
+            }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Folder") },
+            text = { Text("Permanently delete \"${folder.title}\"? Apps inside will not be deleted.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.removeFolder(folder)
+                        showDeleteConfirm = false
+                        onNavigateBack()
+                    }
+                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
             }
         )
     }

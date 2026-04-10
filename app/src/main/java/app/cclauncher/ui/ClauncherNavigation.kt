@@ -42,6 +42,7 @@ import app.cclauncher.helper.showToast
 import app.cclauncher.ui.components.snackbar.LauncherSnackbarHost
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.screens.AppDrawerScreen
+import app.cclauncher.ui.screens.CornerDotSettingsScreen
 import app.cclauncher.ui.screens.FolderDetailScreen
 import app.cclauncher.ui.screens.FolderListScreen
 import app.cclauncher.ui.screens.HiddenAppsScreen
@@ -268,7 +269,8 @@ fun CLauncherNavigation(
                         }
                         pushOnTop(LauncherDestination.HiddenApps)
                     },
-                    onNavigateToFolderList = { pushOnTop(LauncherDestination.FolderList) }
+                    onNavigateToFolderList = { pushOnTop(LauncherDestination.FolderList) },
+                    onNavigateToCornerDotSettings = { pushOnTop(LauncherDestination.CornerDotSettings) },
                 )
             }
 
@@ -324,6 +326,19 @@ fun CLauncherNavigation(
                     folderId = selectedFolderId ?: "",
                     onNavigateBack = {
                         if (backStack.lastOrNull() == LauncherDestination.FolderDetail) {
+                            backStack.removeAt(backStack.lastIndex)
+                        } else {
+                            navigateTo(LauncherDestination.Settings)
+                        }
+                    }
+                )
+            }
+
+            entry<LauncherDestination.CornerDotSettings>(metadata = settingsTransitions) {
+                CornerDotSettingsScreen(
+                    mainViewModel = viewModel,
+                    onNavigateBack = {
+                        if (backStack.lastOrNull() == LauncherDestination.CornerDotSettings) {
                             backStack.removeAt(backStack.lastIndex)
                         } else {
                             navigateTo(LauncherDestination.Settings)
@@ -413,4 +428,7 @@ sealed interface LauncherDestination : NavKey {
 
     @Serializable
     data object FolderDetail : LauncherDestination
+
+    @Serializable
+    data object CornerDotSettings : LauncherDestination
 }

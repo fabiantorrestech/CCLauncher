@@ -79,6 +79,57 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
 
     suspend fun setSwipeDownApp(app: AppPreference) { repo.update { it.copy(swipeDownApp = app) } }
 
+    suspend fun setSwipeFolderId(direction: String, folderId: String) {
+        repo.update { s ->
+            when (direction) {
+                "up" -> s.copy(swipeUpFolderId = folderId)
+                "down" -> s.copy(swipeDownFolderId = folderId)
+                "left" -> s.copy(swipeLeftFolderId = folderId)
+                "right" -> s.copy(swipeRightFolderId = folderId)
+                else -> s
+            }
+        }
+    }
+
+    suspend fun updateCornerDotConfig(corner: Int, config: CornerDotConfig) {
+        repo.update { s ->
+            when (corner) {
+                app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(cornerDotTopLeft = config)
+                app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(cornerDotTopRight = config)
+                app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(cornerDotBottomLeft = config)
+                app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(cornerDotBottomRight = config)
+                else -> s
+            }
+        }
+    }
+
+    suspend fun updateUniversalCornerDotConfig(config: CornerDotConfig) {
+        repo.update { it.copy(cornerDotUniversal = config) }
+    }
+
+    suspend fun updateAllCornerDotAppearance(sourceConfig: CornerDotConfig) {
+        repo.update { s ->
+            val applyAppearance = { target: CornerDotConfig ->
+                if (target.enabled) target.copy(
+                    size = sourceConfig.size,
+                    color = sourceConfig.color,
+                    opacity = sourceConfig.opacity,
+                    visible = sourceConfig.visible,
+                    borderEnabled = sourceConfig.borderEnabled,
+                    borderColor = sourceConfig.borderColor,
+                    borderWidth = sourceConfig.borderWidth,
+                    inset = sourceConfig.inset,
+                ) else target
+            }
+            s.copy(
+                cornerDotTopLeft = applyAppearance(s.cornerDotTopLeft),
+                cornerDotTopRight = applyAppearance(s.cornerDotTopRight),
+                cornerDotBottomLeft = applyAppearance(s.cornerDotBottomLeft),
+                cornerDotBottomRight = applyAppearance(s.cornerDotBottomRight),
+            )
+        }
+    }
+
     suspend fun getSwipeLeftApp(): AppPreference = settings.first().swipeLeftApp
     suspend fun getSwipeRightApp(): AppPreference = settings.first().swipeRightApp
 

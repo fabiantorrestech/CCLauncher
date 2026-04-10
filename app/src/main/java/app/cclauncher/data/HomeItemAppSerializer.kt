@@ -214,6 +214,7 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         element<Float>("titleTextSize")
         element<Int>("titleTextColor")
         element<Int>("titleLabelAlignment")
+        element<Boolean>("showOnHome")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.Folder) {
@@ -232,6 +233,7 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             encodeFloatElement(descriptor, 11, value.titleTextSize)
             encodeIntElement(descriptor, 12, value.titleTextColor)
             encodeIntElement(descriptor, 13, value.titleLabelAlignment)
+            encodeBooleanElement(descriptor, 14, value.showOnHome)
         }
     }
 
@@ -250,6 +252,7 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         var titleTextSize = 1.0f
         var titleTextColor = 0
         var titleLabelAlignment = -1
+        var showOnHome = true
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -268,6 +271,7 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
                     11 -> titleTextSize = decodeFloatElement(descriptor, index)
                     12 -> titleTextColor = decodeIntElement(descriptor, index)
                     13 -> titleLabelAlignment = decodeIntElement(descriptor, index)
+                    14 -> showOnHome = decodeBooleanElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> { /* skip unknown fields for forward compat */ }
                 }
@@ -289,6 +293,7 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             titleTextSize = titleTextSize,
             titleTextColor = titleTextColor,
             titleLabelAlignment = titleLabelAlignment,
+            showOnHome = showOnHome,
         )
     }
 }

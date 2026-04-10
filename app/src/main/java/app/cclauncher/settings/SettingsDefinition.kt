@@ -495,7 +495,7 @@ data class AppSettings(
         title = "Swipe Down Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
         key = "SWIPE_DOWN_ACTION",
     )
     val swipeDownAction: Int = Constants.SwipeAction.NOTIFICATIONS,
@@ -509,11 +509,14 @@ data class AppSettings(
     @Serialized
     val swipeDownApp: AppPreference = AppPreference(),
 
+    @Persisted(key = "SWIPE_DOWN_FOLDER_ID")
+    val swipeDownFolderId: String = "",
+
     @Setting(
         title = "Swipe Up Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
         key = "SWIPE_UP_ACTION",
     )
     val swipeUpAction: Int = Constants.SwipeAction.SEARCH,
@@ -527,14 +530,17 @@ data class AppSettings(
     @Serialized
     val swipeUpApp: AppPreference = AppPreference(),
 
+    @Persisted(key = "SWIPE_UP_FOLDER_ID")
+    val swipeUpFolderId: String = "",
+
     @Setting(
         title = "Swipe Left Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
         key = "SWIPE_LEFT_ACTION",
     )
-    val swipeLeftAction: Int = Constants.SwipeAction.NULL, // Remain until needed?
+    val swipeLeftAction: Int = Constants.SwipeAction.NULL,
 
     @Setting(
         title = "Left Swipe App",
@@ -545,11 +551,14 @@ data class AppSettings(
     @Serialized
     val swipeLeftApp: AppPreference = AppPreference(label = "Not set"),
 
+    @Persisted(key = "SWIPE_LEFT_FOLDER_ID")
+    val swipeLeftFolderId: String = "",
+
     @Setting(
         title = "Swipe Right Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
         key = "SWIPE_RIGHT_ACTION",
     )
     val swipeRightAction: Int = Constants.SwipeAction.NULL,
@@ -562,6 +571,33 @@ data class AppSettings(
     )
     @Serialized
     val swipeRightApp: AppPreference = AppPreference(label = "Not set"),
+
+    @Persisted(key = "SWIPE_RIGHT_FOLDER_ID")
+    val swipeRightFolderId: String = "",
+
+    @Persisted(key = "CORNER_DOT_TOP_LEFT_JSON")
+    @Serialized
+    val cornerDotTopLeft: CornerDotConfig = CornerDotConfig(),
+
+    @Persisted(key = "CORNER_DOT_TOP_RIGHT_JSON")
+    @Serialized
+    val cornerDotTopRight: CornerDotConfig = CornerDotConfig(),
+
+    @Persisted(key = "CORNER_DOT_BOTTOM_LEFT_JSON")
+    @Serialized
+    val cornerDotBottomLeft: CornerDotConfig = CornerDotConfig(),
+
+    @Persisted(key = "CORNER_DOT_BOTTOM_RIGHT_JSON")
+    @Serialized
+    val cornerDotBottomRight: CornerDotConfig = CornerDotConfig(),
+
+    @Persisted(key = "APPLY_TO_ALL_CORNER_DOTS")
+    val applyToAllCornerDots: Boolean = false,
+
+    /** Shared appearance profile used when applyToAllCornerDots == true. */
+    @Persisted(key = "CORNER_DOT_UNIVERSAL_JSON")
+    @Serialized
+    val cornerDotUniversal: CornerDotConfig = CornerDotConfig(),
 
     @Setting(
         title = "Show Folder Icon",

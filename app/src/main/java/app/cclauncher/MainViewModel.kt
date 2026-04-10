@@ -647,6 +647,60 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun setFolderShowOnHome(folderId: String, show: Boolean) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>()
+                .find { it.id == folderId } ?: return@launch
+
+            val updatedFolder = if (!show) {
+                folder.copy(showOnHome = false)
+            } else {
+                // Check if the original position is still free among visible items.
+                val positionFree = validatePlacement(
+                    currentLayout, folderId,
+                    folder.page, folder.row, folder.column,
+                    folder.rowSpan, folder.columnSpan
+                ) is PlacementResult.Valid
+
+                if (positionFree) {
+                    folder.copy(showOnHome = true)
+                } else {
+                    // Original spot is occupied — find the first free position on any page.
+                    var placed: HomeItem.Folder? = null
+                    for (page in 0 until currentLayout.pageCount) {
+                        val pos = findNextAvailableGridPosition(
+                            currentLayout, folder.columnSpan, folder.rowSpan, page
+                        )
+                        if (pos != null) {
+                            placed = folder.copy(showOnHome = true, page = page, row = pos.first, column = pos.second)
+                            break
+                        }
+                    }
+                    if (placed != null) {
+                        snackbarManager.show("Original position occupied — folder moved to first available spot")
+                        placed
+                    } else {
+                        // No free space anywhere — restore in place anyway so it isn't lost
+                        snackbarManager.show("No free grid space found; folder restored to original position")
+                        folder.copy(showOnHome = true)
+                    }
+                }
+            }
+
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    private val _openFolderEvent = kotlinx.coroutines.flow.MutableSharedFlow<String>(replay = 0)
+    val openFolderEvent: kotlinx.coroutines.flow.SharedFlow<String> = _openFolderEvent.asSharedFlow()
+
+    fun openFolderById(folderId: String) {
+        if (folderId.isBlank()) return
+        viewModelScope.launch { _openFolderEvent.emit(folderId) }
+    }
+
     fun moveFolder(folderItem: HomeItem.Folder, newRow: Int, newColumn: Int) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value
@@ -895,13 +949,16 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
     ): Pair<Int, Int>? {
         val occupied = Array(layout.rows) { BooleanArray(layout.columns) }
 
-        layout.itemsForPage(page).forEach { item ->
-            for (r in item.row until (item.row + item.rowSpan).coerceAtMost(layout.rows)) {
-                for (c in item.column until (item.column + item.columnSpan).coerceAtMost(layout.columns)) {
-                    if (r >= 0 && c >= 0) occupied[r][c] = true
+        // Hidden folders are transparent — they don't occupy grid space.
+        layout.itemsForPage(page)
+            .filter { item -> item !is HomeItem.Folder || item.showOnHome }
+            .forEach { item ->
+                for (r in item.row until (item.row + item.rowSpan).coerceAtMost(layout.rows)) {
+                    for (c in item.column until (item.column + item.columnSpan).coerceAtMost(layout.columns)) {
+                        if (r >= 0 && c >= 0) occupied[r][c] = true
+                    }
                 }
             }
-        }
 
         for (r in 0..layout.rows - heightSpan) {
             for (c in 0..layout.columns - widthSpan) {
@@ -1990,9 +2047,11 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             return PlacementResult.Invalid("Would go out of bounds horizontally")
         }
 
-        // Overlap check - only check items on the same page
+        // Overlap check - only check items on the same page.
+        // Hidden folders (showOnHome == false) are treated as not occupying space.
         val hasOverlap = layout.itemsForPage(page).any { item ->
             if (item.id == itemId) return@any false
+            if (item is HomeItem.Folder && !item.showOnHome) return@any false
 
             val itemEndRow = item.row + item.rowSpan
             val itemEndCol = item.column + item.columnSpan

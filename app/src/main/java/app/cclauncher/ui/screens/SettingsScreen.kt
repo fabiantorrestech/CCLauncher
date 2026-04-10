@@ -25,6 +25,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -64,6 +66,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
+import app.cclauncher.data.HomeItem
 import app.cclauncher.settings.AppPreference
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.helper.IconCache
@@ -154,6 +157,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToHiddenApps: () -> Unit = {},
     onNavigateToFolderList: () -> Unit = {},
+    onNavigateToCornerDotSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val uiState by viewModel.settingsState.collectAsState()
@@ -175,6 +179,14 @@ fun SettingsScreen(
 
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
+
+    val homeLayoutState by mainViewModel.homeLayoutState.collectAsState()
+    val allFolders = remember(homeLayoutState.items) {
+        homeLayoutState.items.filterIsInstance<HomeItem.Folder>()
+    }
+    // "swipeDirection" -> show folder-picker dialog for that direction; null = closed
+    var swipeFolderPickerFor by remember { mutableStateOf<String?>(null) }
+    var swipeFolderSearch by remember { mutableStateOf("") }
 
 
     val pickFontLauncher = rememberLauncherForActivityResult(
@@ -425,6 +437,65 @@ fun SettingsScreen(
             onDismiss = {
                 showPageWarningDialog = false
                 pendingPageChange = null
+            }
+        )
+    }
+
+    // Swipe-action folder picker dialog
+    if (swipeFolderPickerFor != null) {
+        val direction = swipeFolderPickerFor!!
+        val filteredFolders = remember(swipeFolderSearch, allFolders) {
+            if (swipeFolderSearch.isBlank()) allFolders
+            else allFolders.filter { it.title.contains(swipeFolderSearch, ignoreCase = true) }
+        }
+        AlertDialog(
+            onDismissRequest = { swipeFolderPickerFor = null; swipeFolderSearch = "" },
+            title = { Text("Open Folder on Swipe ${direction.replaceFirstChar { it.uppercase() }}") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = swipeFolderSearch,
+                        onValueChange = { swipeFolderSearch = it },
+                        placeholder = { Text("Search folders…") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.height(280.dp)
+                    ) {
+                        if (filteredFolders.isEmpty()) {
+                            item {
+                                Text(
+                                    "No folders found",
+                                    modifier = Modifier.padding(8.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            items(filteredFolders, key = { it.id }) { folder ->
+                                androidx.compose.material3.ListItem(
+                                    headlineContent = { Text(folder.title) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                viewModel.updateSetting(
+                                                    "swipe${direction.replaceFirstChar { it.uppercase() }}FolderId",
+                                                    folder.id
+                                                )
+                                            }
+                                            swipeFolderPickerFor = null
+                                            swipeFolderSearch = ""
+                                        }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { swipeFolderPickerFor = null; swipeFolderSearch = "" }) { Text("Cancel") }
             }
         )
     }
@@ -831,6 +902,55 @@ fun SettingsScreen(
                                                     onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
                                                 )
                                             }
+                                            // Inline folder picker row for swipe-action Open Folder
+                                            if (tab.category == app.cclauncher.settings.Gestures::class) {
+                                                when (field.name) {
+                                                    "swipeDownAction" -> if (uiState.swipeDownAction == Constants.SwipeAction.OPEN_FOLDER) {
+                                                        SettingsItem(
+                                                            title = "Swipe Down Folder",
+                                                            subtitle = allFolders.find { it.id == uiState.swipeDownFolderId }?.title
+                                                                ?: "Not set",
+                                                            modifier = Modifier.padding(start = 24.dp),
+                                                            onClick = { swipeFolderPickerFor = "down" },
+                                                        )
+                                                    }
+                                                    "swipeUpAction" -> if (uiState.swipeUpAction == Constants.SwipeAction.OPEN_FOLDER) {
+                                                        SettingsItem(
+                                                            title = "Swipe Up Folder",
+                                                            subtitle = allFolders.find { it.id == uiState.swipeUpFolderId }?.title
+                                                                ?: "Not set",
+                                                            modifier = Modifier.padding(start = 24.dp),
+                                                            onClick = { swipeFolderPickerFor = "up" },
+                                                        )
+                                                    }
+                                                    "swipeLeftAction" -> if (uiState.swipeLeftAction == Constants.SwipeAction.OPEN_FOLDER) {
+                                                        SettingsItem(
+                                                            title = "Swipe Left Folder",
+                                                            subtitle = allFolders.find { it.id == uiState.swipeLeftFolderId }?.title
+                                                                ?: "Not set",
+                                                            modifier = Modifier.padding(start = 24.dp),
+                                                            onClick = { swipeFolderPickerFor = "left" },
+                                                        )
+                                                    }
+                                                    "swipeRightAction" -> if (uiState.swipeRightAction == Constants.SwipeAction.OPEN_FOLDER) {
+                                                        SettingsItem(
+                                                            title = "Swipe Right Folder",
+                                                            subtitle = allFolders.find { it.id == uiState.swipeRightFolderId }?.title
+                                                                ?: "Not set",
+                                                            modifier = Modifier.padding(start = 24.dp),
+                                                            onClick = { swipeFolderPickerFor = "right" },
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Corner dots section at the end of Gestures tab
+                                        if (tab.category == app.cclauncher.settings.Gestures::class) {
+                                            SettingsAction(
+                                                title = "Configure Corner Dots",
+                                                description = "Set up tappable shortcut dots in the home screen corners",
+                                                onClick = onNavigateToCornerDotSettings,
+                                            )
                                         }
                                     }
                                 }

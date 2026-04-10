@@ -51,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
+import app.cclauncher.settings.CornerDotConfig
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
@@ -130,28 +132,29 @@ fun HomeScreen(
         }
     }
 
-    fun handleSwipeAction(action: Int, appLauncher: () -> Unit) {
+    fun handleSwipeAction(action: Int, appLauncher: () -> Unit, folderId: String = "") {
         when (action) {
             Constants.SwipeAction.NOTIFICATIONS -> expandNotificationDrawer(context)
             Constants.SwipeAction.SEARCH -> onNavigateToAppDrawer()
             Constants.SwipeAction.APP -> appLauncher()
             Constants.SwipeAction.NEXT_PAGE -> goToNextPage()
             Constants.SwipeAction.PREVIOUS_PAGE -> goToPreviousPage()
+            Constants.SwipeAction.OPEN_FOLDER -> viewModel.openFolderById(folderId)
             Constants.SwipeAction.NULL -> {}
         }
     }
 
     val onSwipeUp: () -> Unit = {
-        handleSwipeAction(settings.swipeUpAction) { viewModel.launchSwipeUpApp() }
+        handleSwipeAction(settings.swipeUpAction, { viewModel.launchSwipeUpApp() }, settings.swipeUpFolderId)
     }
     val onSwipeDown: () -> Unit = {
-        handleSwipeAction(settings.swipeDownAction) { viewModel.launchSwipeDownApp() }
+        handleSwipeAction(settings.swipeDownAction, { viewModel.launchSwipeDownApp() }, settings.swipeDownFolderId)
     }
     val onSwipeLeft: () -> Unit = {
-        handleSwipeAction(settings.swipeLeftAction) { viewModel.launchSwipeLeftApp() }
+        handleSwipeAction(settings.swipeLeftAction, { viewModel.launchSwipeLeftApp() }, settings.swipeLeftFolderId)
     }
     val onSwipeRight: () -> Unit = {
-        handleSwipeAction(settings.swipeRightAction) { viewModel.launchSwipeRightApp() }
+        handleSwipeAction(settings.swipeRightAction, { viewModel.launchSwipeRightApp() }, settings.swipeRightFolderId)
     }
 
     var showAppContextMenu by remember { mutableStateOf<HomeItem.App?>(null) }
@@ -169,6 +172,13 @@ fun HomeScreen(
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+    }
+
+    // Collect openFolderById events from the ViewModel (used by swipe actions and corner dots)
+    LaunchedEffect(viewModel) {
+        viewModel.openFolderEvent.collect { folderId ->
+            openFolderId = if (openFolderId == folderId) null else folderId
+        }
     }
 
     Box(
@@ -454,6 +464,14 @@ fun HomeScreen(
                 )
             }
         }
+
+        // Corner shortcut dots — rendered on top of everything
+        HomeCornerDots(
+            settings = settings,
+            allFolders = homeLayoutState.items.filterIsInstance<HomeItem.Folder>(),
+            onOpenFolder = { folderId -> openFolderId = if (openFolderId == folderId) null else folderId },
+            onAction = { action -> handleSwipeAction(action, {}) },
+        )
     }
 }
 
@@ -482,7 +500,9 @@ private fun HomeScreenPage(
     onCancelMovement: () -> Unit
 ) {
     val pageItems = remember(homeLayout.items, page) {
-        homeLayout.itemsForPage(page)
+        homeLayout.itemsForPage(page).filter { item ->
+            item !is HomeItem.Folder || item.showOnHome
+        }
     }
 
     val isMoving = widgetBeingMoved != null || appBeingMoved != null || folderBeingMoved != null
@@ -874,6 +894,7 @@ fun HomeAppContextMenu(
                 TextButton(onClick = {
                     onTextSizeChange(textSize)
                     showTextSizeEditor = false
+                    onDismiss()
                 }) { Text("Apply") }
             },
             dismissButton = {
@@ -1044,10 +1065,12 @@ private fun findFolderAtPosition(
     val column = (position.x / cellWidth).toInt()
     val row = (position.y / cellHeight).toInt()
 
-    return homeLayout.itemsForPage(page).filterIsInstance<HomeItem.Folder>().find { folder ->
-        row >= folder.row && row < folder.row + folder.rowSpan &&
-                column >= folder.column && column < folder.column + folder.columnSpan
-    }
+    return homeLayout.itemsForPage(page).filterIsInstance<HomeItem.Folder>()
+        .filter { it.showOnHome }
+        .find { folder ->
+            row >= folder.row && row < folder.row + folder.rowSpan &&
+                    column >= folder.column && column < folder.column + folder.columnSpan
+        }
 }
 
 private fun calculateGridPosition(
@@ -1063,6 +1086,70 @@ private fun calculateGridPosition(
     return if (row in 0 until homeLayout.rows && column in 0 until homeLayout.columns) {
         Pair(row, column)
     } else null
+}
+
+/**
+ * Renders the 4 corner shortcut dots overlaid on the home screen.
+ * Dots with [CornerDotConfig.visible] == false are rendered as transparent touch targets.
+ * Dots with [CornerDotConfig.enabled] == false are skipped entirely.
+ */
+@Composable
+private fun HomeCornerDots(
+    settings: AppSettings,
+    allFolders: List<HomeItem.Folder>,
+    onOpenFolder: (String) -> Unit,
+    onAction: (Int) -> Unit,
+) {
+    val corners = listOf(
+        Alignment.TopStart to settings.cornerDotTopLeft,
+        Alignment.TopEnd to settings.cornerDotTopRight,
+        Alignment.BottomStart to settings.cornerDotBottomLeft,
+        Alignment.BottomEnd to settings.cornerDotBottomRight,
+    )
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        corners.forEach { (alignment, rawConfig) ->
+            if (!rawConfig.enabled) return@forEach
+            // When "apply to all" is on, use the universal profile for appearance.
+            val config = if (settings.applyToAllCornerDots) {
+                val u = settings.cornerDotUniversal
+                rawConfig.copy(
+                    size = u.size, color = u.color, opacity = u.opacity, visible = u.visible,
+                    borderEnabled = u.borderEnabled, borderColor = u.borderColor,
+                    borderWidth = u.borderWidth, inset = u.inset,
+                )
+            } else rawConfig
+
+            val dotColor = if (config.visible) {
+                Color(config.color).copy(alpha = config.opacity)
+            } else {
+                Color.Transparent
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(alignment)
+                    .padding(config.inset.dp)
+                    .size(config.size.dp)
+                    .clip(CircleShape)
+                    .background(dotColor)
+                    .then(
+                        if (config.borderEnabled && config.visible)
+                            Modifier.border(config.borderWidth.dp, Color(config.borderColor).copy(alpha = config.opacity), CircleShape)
+                        else Modifier
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) {
+                        when (config.action) {
+                            Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(config.folderId)
+                            else -> onAction(config.action)
+                        }
+                    }
+            )
+        }
+    }
 }
 
 @Composable
