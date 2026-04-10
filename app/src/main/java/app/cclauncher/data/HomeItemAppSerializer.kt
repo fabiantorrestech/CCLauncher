@@ -27,6 +27,8 @@ import kotlinx.serialization.encoding.encodeStructure
         element<Boolean>("isSystemShortcut")
         element<String>("systemShortcutId")
         element<String>("systemShortcutPackage")
+        element<Float>("appTextSize")
+        element<Int>("appLabelAlignment")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.App) {
@@ -45,6 +47,8 @@ import kotlinx.serialization.encoding.encodeStructure
             encodeBooleanElement(descriptor, 11, value.appModel.isSystemShortcut)
             encodeStringElement(descriptor, 12, value.appModel.systemShortcutId.orEmpty())
             encodeStringElement(descriptor, 13, value.appModel.systemShortcutPackage.orEmpty())
+            encodeFloatElement(descriptor, 14, value.appTextSize)
+            encodeIntElement(descriptor, 15, value.appLabelAlignment)
         }
     }
 
@@ -63,6 +67,8 @@ import kotlinx.serialization.encoding.encodeStructure
         var isSystemShortcut = false
         var systemShortcutId = ""
         var systemShortcutPackage = ""
+        var appTextSize = 1.0f
+        var appLabelAlignment = -1
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -81,6 +87,8 @@ import kotlinx.serialization.encoding.encodeStructure
                     11 -> isSystemShortcut = decodeBooleanElement(descriptor, index)
                     12 -> systemShortcutId = decodeStringElement(descriptor, index)
                     13 -> systemShortcutPackage = decodeStringElement(descriptor, index)
+                    14 -> appTextSize = decodeFloatElement(descriptor, index)
+                    15 -> appLabelAlignment = decodeIntElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> {
                         decodeStringElement(descriptor, index)
@@ -107,6 +115,8 @@ import kotlinx.serialization.encoding.encodeStructure
         return HomeItem.App(
             id = id,
             appModel = appModel,
+            appTextSize = appTextSize,
+            appLabelAlignment = appLabelAlignment,
             page = page,
             row = row,
             column = column,
@@ -201,6 +211,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         element<Int>("gridColumns")
         element("apps", appsSerializer.descriptor)
         element<Float>("appTextSize")
+        element<Float>("titleTextSize")
+        element<Int>("titleTextColor")
+        element<Int>("titleLabelAlignment")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.Folder) {
@@ -216,6 +229,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             encodeIntElement(descriptor, 8, value.gridColumns)
             encodeSerializableElement(descriptor, 9, appsSerializer, value.apps)
             encodeFloatElement(descriptor, 10, value.appTextSize)
+            encodeFloatElement(descriptor, 11, value.titleTextSize)
+            encodeIntElement(descriptor, 12, value.titleTextColor)
+            encodeIntElement(descriptor, 13, value.titleLabelAlignment)
         }
     }
 
@@ -231,6 +247,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         var gridColumns = Constants.GridSize.DEFAULT_COLUMNS
         var apps = emptyList<FolderApp>()
         var appTextSize = 1.0f
+        var titleTextSize = 1.0f
+        var titleTextColor = 0
+        var titleLabelAlignment = -1
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -246,6 +265,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
                     8 -> gridColumns = decodeIntElement(descriptor, index)
                     9 -> apps = decodeSerializableElement(descriptor, index, appsSerializer)
                     10 -> appTextSize = decodeFloatElement(descriptor, index)
+                    11 -> titleTextSize = decodeFloatElement(descriptor, index)
+                    12 -> titleTextColor = decodeIntElement(descriptor, index)
+                    13 -> titleLabelAlignment = decodeIntElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> { /* skip unknown fields for forward compat */ }
                 }
@@ -264,6 +286,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             gridColumns = gridColumns,
             apps = apps,
             appTextSize = appTextSize,
+            titleTextSize = titleTextSize,
+            titleTextColor = titleTextColor,
+            titleLabelAlignment = titleLabelAlignment,
         )
     }
 }

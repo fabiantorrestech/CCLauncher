@@ -53,7 +53,9 @@ fun HomeAppItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     appWidth: Dp,
-    appHeight: Dp
+    appHeight: Dp,
+    appTextSize: Float = 1.0f,
+    appLabelAlignment: Int = -1,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -114,9 +116,10 @@ fun HomeAppItem(
         Pair(48.dp, MaterialTheme.typography.bodyMedium.fontSize)
     }
 
-    val effectiveFontSize = (baseFontSize.value * fontScale).sp
+    val effectiveFontSize = (baseFontSize.value * fontScale * appTextSize).sp
 
-    val textAlign = when (settings.appLabelAlignment) {
+    val effectiveAlignment = if (appLabelAlignment >= 0) appLabelAlignment else settings.appLabelAlignment
+    val textAlign = when (effectiveAlignment) {
         1 -> TextAlign.Center
         2 -> TextAlign.Right
         else -> TextAlign.Left

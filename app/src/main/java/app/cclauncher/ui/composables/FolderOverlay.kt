@@ -7,7 +7,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,11 +57,15 @@ fun FolderOverlay(
     onMoveApp: (FolderApp, Int, Int) -> Unit,
     onRemoveApp: (FolderApp) -> Unit,
     onResizeApp: (FolderApp, Int, Int) -> Unit,
+    onAppTextSizeChange: (FolderApp, Float) -> Unit = { _, _ -> },
+    onAppLabelAlignmentChange: (FolderApp, Int) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     var movingApp by remember { mutableStateOf<FolderApp?>(null) }
     var appContextMenu by remember { mutableStateOf<FolderApp?>(null) }
     var resizingApp by remember { mutableStateOf<FolderApp?>(null) }
+    var textSizingApp by remember { mutableStateOf<FolderApp?>(null) }
+    var alignmentApp by remember { mutableStateOf<FolderApp?>(null) }
 
     BackHandler { onDismiss() }
 
@@ -84,8 +91,11 @@ fun FolderOverlay(
                 Text(
                     text = folder.title,
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
-                    color = if (settings.useCustomTextColor && settings.textColor != 0)
-                        Color(settings.textColor) else MaterialTheme.colorScheme.onSurface,
+                    color = when {
+                        folder.titleTextColor != 0 -> Color(folder.titleTextColor)
+                        settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
+                        else -> MaterialTheme.colorScheme.onSurface
+                    },
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -161,6 +171,14 @@ fun FolderOverlay(
                             onClick = { resizingApp = app; appContextMenu = null }
                         )
                         DropdownMenuItem(
+                            text = { Text("Text Size") },
+                            onClick = { textSizingApp = app; appContextMenu = null }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Label Alignment") },
+                            onClick = { alignmentApp = app; appContextMenu = null }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Remove from Folder") },
                             onClick = { onRemoveApp(app); appContextMenu = null }
                         )
@@ -217,6 +235,54 @@ fun FolderOverlay(
                 }
             )
         }
+
+        // Text size dialog for app inside folder
+        textSizingApp?.let { app ->
+            var textSize by remember(app) { mutableFloatStateOf(app.appTextSize) }
+            AlertDialog(
+                onDismissRequest = { textSizingApp = null },
+                title = { Text("Text Size") },
+                text = {
+                    Column {
+                        Text("Size: ${"%.1f".format(textSize)}")
+                        Slider(
+                            value = textSize,
+                            onValueChange = { textSize = it },
+                            valueRange = 0.5f..2.0f,
+                            steps = 29,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(
+                            onClick = { textSize = 1.0f }
+                        ) {
+                            Text("Apply default text size (folder)")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onAppTextSizeChange(app, textSize)
+                        textSizingApp = null
+                    }) { Text("Apply") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { textSizingApp = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Label alignment dialog for app inside folder
+        alignmentApp?.let { app ->
+            LabelAlignmentDialog(
+                currentAlignment = app.appLabelAlignment,
+                onDismiss = { alignmentApp = null },
+                onAlignmentSelected = { alignment ->
+                    onAppLabelAlignmentChange(app, alignment)
+                    alignmentApp = null
+                }
+            )
+        }
     }
 }
 
@@ -258,6 +324,7 @@ private fun FolderGridContent(
                     folderApp = app,
                     settings = settings,
                     appTextSizeScale = appTextSizeScale,
+                    folderTextColor = folder.titleTextColor,
                     modifier = itemMod,
                 )
             }
@@ -270,17 +337,27 @@ private fun HomeFolderAppItem(
     folderApp: FolderApp,
     settings: AppSettings,
     appTextSizeScale: Float = 1.0f,
+    folderTextColor: Int = 0,
     modifier: Modifier = Modifier,
 ) {
-    val textColor = if (settings.useCustomTextColor && settings.textColor != 0)
-        Color(settings.textColor) else MaterialTheme.colorScheme.onSurface
+    val textColor = when {
+        folderTextColor != 0 -> Color(folderTextColor)
+        settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
+        else -> MaterialTheme.colorScheme.onSurface
+    }
     val fontWeight = when (settings.fontWeight) {
         0 -> FontWeight.Thin; 1 -> FontWeight.Light; 2 -> FontWeight.Normal
         3 -> FontWeight.Medium; 4 -> FontWeight.Bold; 5 -> FontWeight.Black
         else -> FontWeight.Normal
     }
-    val effectiveFontSize = (MaterialTheme.typography.bodyMedium.fontSize.value * appTextSizeScale).let {
+    val effectiveFontSize = (MaterialTheme.typography.bodyMedium.fontSize.value * appTextSizeScale * folderApp.appTextSize).let {
         androidx.compose.ui.unit.TextUnit(it, androidx.compose.ui.unit.TextUnitType.Sp)
+    }
+    val effectiveAlignment = if (folderApp.appLabelAlignment >= 0) folderApp.appLabelAlignment else settings.appLabelAlignment
+    val textAlign = when (effectiveAlignment) {
+        1 -> TextAlign.Center
+        2 -> TextAlign.Right
+        else -> TextAlign.Left
     }
 
     Text(
@@ -290,11 +367,46 @@ private fun HomeFolderAppItem(
             fontWeight = fontWeight,
         ),
         color = textColor,
+        textAlign = textAlign,
         maxLines = 2,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
         modifier = modifier
             .fillMaxSize()
             .padding(4.dp),
+    )
+}
+
+@Composable
+fun LabelAlignmentDialog(
+    currentAlignment: Int,
+    onDismiss: () -> Unit,
+    onAlignmentSelected: (Int) -> Unit,
+) {
+    val options = listOf("Default" to -1, "Left" to 0, "Center" to 1, "Right" to 2)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Label Alignment") },
+        text = {
+            Column {
+                options.forEach { (label, value) ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (value == currentAlignment) "$label (current)" else label,
+                                color = if (value == currentAlignment)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = { if (value != currentAlignment) onAlignmentSelected(value) },
+                        enabled = value != currentAlignment,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
     )
 }
 

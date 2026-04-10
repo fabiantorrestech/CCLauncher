@@ -18,6 +18,8 @@ sealed class HomeItem {
     @Serializable(with = HomeItemAppSerializer::class)
     data class App(
         val appModel: AppModel,
+        val appTextSize: Float = 1.0f,
+        val appLabelAlignment: Int = -1,
         override val id: String = appModel.getKey(),
         override val page: Int = 0,
         override val row: Int,
@@ -48,6 +50,9 @@ sealed class HomeItem {
         val gridRows: Int = Constants.GridSize.DEFAULT_ROWS,
         val gridColumns: Int = Constants.GridSize.DEFAULT_COLUMNS,
         val appTextSize: Float = 1.0f,
+        val titleTextSize: Float = 1.0f,
+        val titleTextColor: Int = 0,
+        val titleLabelAlignment: Int = -1,
         override val id: String = "folder_${UUID.randomUUID()}",
         override val page: Int = 0,
         override val row: Int,
@@ -71,6 +76,8 @@ data class FolderApp(
     val isSystemShortcut: Boolean = false,
     val systemShortcutId: String? = null,
     val systemShortcutPackage: String? = null,
+    val appTextSize: Float = 1.0f,
+    val appLabelAlignment: Int = -1,
 ) {
     fun toAppModel() = AppModel(
         appLabel = appLabel,

@@ -710,6 +710,76 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun updateFolderTitleTextSize(folderId: String, textSize: Float) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(titleTextSize = textSize)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderTitleColor(folderId: String, color: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(titleTextColor = color)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateHomeAppTextSize(appItem: HomeItem.App, textSize: Float) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val updatedApp = appItem.copy(appTextSize = textSize)
+            val updatedItems = currentLayout.items.map { if (it.id == appItem.id) updatedApp else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderAppIndividualTextSize(folderId: String, folderApp: FolderApp, textSize: Float) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedApp = folderApp.copy(appTextSize = textSize)
+            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateHomeAppLabelAlignment(appItem: HomeItem.App, alignment: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val updatedApp = appItem.copy(appLabelAlignment = alignment)
+            val updatedItems = currentLayout.items.map { if (it.id == appItem.id) updatedApp else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderTitleLabelAlignment(folderId: String, alignment: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(titleLabelAlignment = alignment)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderAppIndividualLabelAlignment(folderId: String, folderApp: FolderApp, alignment: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedApp = folderApp.copy(appLabelAlignment = alignment)
+            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun resizeFolderApp(folderId: String, folderApp: FolderApp, newRowSpan: Int, newColSpan: Int) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value

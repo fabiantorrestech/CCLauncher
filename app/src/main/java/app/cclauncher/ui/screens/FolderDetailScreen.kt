@@ -1,5 +1,6 @@
 package app.cclauncher.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,8 +11,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -39,11 +42,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
+import app.cclauncher.ui.components.ColorPickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,6 +76,7 @@ fun FolderDetailScreen(
     var appTextSize by remember(folder.appTextSize) { mutableFloatStateOf(folder.appTextSize) }
     var showAppPicker by remember { mutableStateOf(false) }
     var appPickerSearch by remember { mutableStateOf("") }
+    var showColorPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -140,7 +147,7 @@ fun FolderDetailScreen(
 
             item {
                 Text(
-                    "App Text Size: ${"%.1f".format(appTextSize)}",
+                    "App Text Size (Default): ${"%.1f".format(appTextSize)}",
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Slider(
@@ -153,6 +160,34 @@ fun FolderDetailScreen(
                     steps = 29,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
+                Text("Folder Text Color", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (folder.titleTextColor != 0) Color(folder.titleTextColor)
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                    )
+                    TextButton(onClick = { showColorPicker = true }) {
+                        Text(if (folder.titleTextColor != 0) "Change color" else "Set custom color")
+                    }
+                    if (folder.titleTextColor != 0) {
+                        TextButton(onClick = { viewModel.updateFolderTitleColor(folderId, 0) }) {
+                            Text("Reset")
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
             }
 
@@ -199,6 +234,18 @@ fun FolderDetailScreen(
 
             item { Spacer(Modifier.height(32.dp)) }
         }
+    }
+
+    if (showColorPicker) {
+        ColorPickerDialog(
+            title = "Folder Text Color",
+            currentColor = folder.titleTextColor,
+            onDismiss = { showColorPicker = false },
+            onColorSelected = { color ->
+                viewModel.updateFolderTitleColor(folderId, color)
+                showColorPicker = false
+            }
+        )
     }
 
     // Inline app picker dialog

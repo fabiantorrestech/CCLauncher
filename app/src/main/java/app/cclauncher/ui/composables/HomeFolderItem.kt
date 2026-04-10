@@ -52,10 +52,11 @@ fun HomeFolderItem(
         }
     }
 
-    val fontScale = settings.textSizeScale
+    val fontScale = settings.textSizeScale * folder.titleTextSize
     val effectiveFontSize = (MaterialTheme.typography.bodyMedium.fontSize.value * fontScale).sp
 
-    val textAlign = when (settings.appLabelAlignment) {
+    val effectiveAlignment = if (folder.titleLabelAlignment >= 0) folder.titleLabelAlignment else settings.appLabelAlignment
+    val textAlign = when (effectiveAlignment) {
         1 -> TextAlign.Center
         2 -> TextAlign.Right
         else -> TextAlign.Left

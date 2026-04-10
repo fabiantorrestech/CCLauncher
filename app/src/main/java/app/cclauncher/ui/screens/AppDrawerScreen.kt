@@ -162,16 +162,14 @@ fun AppDrawerScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    DisposableEffect(lifecycleOwner, settings.autoShowKeyboard) { // HACK: duplicated logic, opens keyboard after closing an app
+    // On pause (e.g. screen lock), explicitly dismiss the keyboard so IME insets are
+    // zeroed out before the activity pauses. Without this, stale insets persist on
+    // resume and imePadding() reserves blank space where the keyboard was.
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                if (settings.autoShowKeyboard && searchQuery.isEmpty()) {
-                    try {
-                        focusRequester.requestFocus()
-                        keyboardController?.show()
-                    } catch (_: Exception) {
-                    }
-                }
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                focusManager.clearFocus()
+                keyboardController?.hide()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

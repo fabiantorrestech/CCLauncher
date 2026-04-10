@@ -18,7 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -118,7 +118,7 @@ fun ScrollbarIndicator(
                 .height(thumbHeightDp)
                 .offset(y = thumbOffsetDp)
                 .background(
-                    color = if (isDragging) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.4f),
+                    color = if (isDragging) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                     shape = RoundedCornerShape(thumbWidthDp / 2)
                 )
         )

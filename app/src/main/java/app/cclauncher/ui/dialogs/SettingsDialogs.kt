@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cclauncher.ui.viewmodels.ImportExportState
 import io.github.mlmgames.settings.core.backup.ValidationResult
+import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,7 +41,7 @@ fun SliderSettingDialog(
                     value = sliderValue,
                     onValueChange = {
                         // Round to nearest step
-                        val steps = ((it - min) / step).toInt()
+                        val steps = ((it - min) / step).roundToInt()
                         sliderValue = min + (steps * step)
                     },
                     valueRange = min..max,

@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -27,6 +30,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -36,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
@@ -302,6 +307,12 @@ fun HomeScreen(
                         viewModel.addAppToFolder(folder.id, it.appModel)
                         viewModel.removeAppFromHomeScreen(it)
                         showAppContextMenu = null
+                    },
+                    onTextSizeChange = { textSize ->
+                        viewModel.updateHomeAppTextSize(it, textSize)
+                    },
+                    onLabelAlignmentChange = { alignment ->
+                        viewModel.updateHomeAppLabelAlignment(it, alignment)
                     }
                 )
             }
@@ -368,6 +379,12 @@ fun HomeScreen(
                     onRename = { folder, newTitle ->
                         viewModel.renameFolder(folder.id, newTitle)
                         showFolderContextMenu = null
+                    },
+                    onTextSizeChange = { textSize ->
+                        viewModel.updateFolderTitleTextSize(it.id, textSize)
+                    },
+                    onLabelAlignmentChange = { alignment ->
+                        viewModel.updateFolderTitleLabelAlignment(it.id, alignment)
                     }
                 )
             }
@@ -427,6 +444,12 @@ fun HomeScreen(
                     },
                     onResizeApp = { folderApp, newRowSpan, newColSpan ->
                         viewModel.resizeFolderApp(fid, folderApp, newRowSpan, newColSpan)
+                    },
+                    onAppTextSizeChange = { folderApp, textSize ->
+                        viewModel.updateFolderAppIndividualTextSize(fid, folderApp, textSize)
+                    },
+                    onAppLabelAlignmentChange = { folderApp, alignment ->
+                        viewModel.updateFolderAppIndividualLabelAlignment(fid, folderApp, alignment)
                     }
                 )
             }
@@ -604,7 +627,9 @@ private fun HomeScreenContent(
                             appWidth = cellWidth * item.columnSpan,
                             appHeight = cellHeight * item.rowSpan,
                             onClick = { onAppClick(item) },
-                            onLongClick = { onAppLongPress(item) }
+                            onLongClick = { onAppLongPress(item) },
+                            appTextSize = item.appTextSize,
+                            appLabelAlignment = item.appLabelAlignment,
                         )
                     }
 
@@ -803,9 +828,13 @@ fun HomeAppContextMenu(
     onMove: (HomeItem.App) -> Unit,
     onMoveToPage: (HomeItem.App, Int) -> Unit,
     onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
+    onTextSizeChange: (Float) -> Unit = {},
+    onLabelAlignmentChange: (Int) -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
+    var showTextSizeEditor by remember { mutableStateOf(false) }
+    var showLabelAlignmentPicker by remember { mutableStateOf(false) }
 
     if (showPageSelector) {
         PageSelectorDialog(
@@ -815,6 +844,49 @@ fun HomeAppContextMenu(
             onPageSelected = { targetPage ->
                 onMoveToPage(appItem, targetPage)
                 showPageSelector = false
+                onDismiss()
+            }
+        )
+    } else if (showTextSizeEditor) {
+        var textSize by remember { mutableFloatStateOf(appItem.appTextSize) }
+        AlertDialog(
+            onDismissRequest = { showTextSizeEditor = false },
+            title = { Text("Text Size") },
+            text = {
+                Column {
+                    Text("Size: ${"%.1f".format(textSize)}")
+                    Slider(
+                        value = textSize,
+                        onValueChange = { textSize = it },
+                        valueRange = 0.5f..2.0f,
+                        steps = 29,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = { textSize = 1.0f }
+                    ) {
+                        Text("Apply default text size (homescreen)")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onTextSizeChange(textSize)
+                    showTextSizeEditor = false
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTextSizeEditor = false }) { Text("Cancel") }
+            }
+        )
+    } else if (showLabelAlignmentPicker) {
+        app.cclauncher.ui.composables.LabelAlignmentDialog(
+            currentAlignment = appItem.appLabelAlignment,
+            onDismiss = { showLabelAlignmentPicker = false },
+            onAlignmentSelected = { alignment ->
+                onLabelAlignmentChange(alignment)
+                showLabelAlignmentPicker = false
                 onDismiss()
             }
         )
@@ -858,6 +930,14 @@ fun HomeAppContextMenu(
                     DropdownMenuItem(
                         text = { Text("Resize") },
                         onClick = { onResize(appItem); onDismiss() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Text Size") },
+                        onClick = { showTextSizeEditor = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Label Alignment") },
+                        onClick = { showLabelAlignmentPicker = true }
                     )
                     if (folders.isNotEmpty() && onAddToFolder != null) {
                         DropdownMenuItem(
@@ -995,9 +1075,13 @@ fun FolderContextMenu(
     onMove: (HomeItem.Folder) -> Unit,
     onMoveToPage: (HomeItem.Folder, Int) -> Unit,
     onRename: (HomeItem.Folder, String) -> Unit,
+    onTextSizeChange: (Float) -> Unit = {},
+    onLabelAlignmentChange: (Int) -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
+    var showTextSizeEditor by remember { mutableStateOf(false) }
+    var showLabelAlignmentPicker by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf(folderItem.title) }
 
     if (showPageSelector) {
@@ -1033,6 +1117,47 @@ fun FolderContextMenu(
                 TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
             }
         )
+    } else if (showTextSizeEditor) {
+        var textSize by remember { mutableFloatStateOf(folderItem.titleTextSize) }
+        AlertDialog(
+            onDismissRequest = { showTextSizeEditor = false },
+            title = { Text("Text Size") },
+            text = {
+                Column {
+                    Text("Size: ${"%.1f".format(textSize)}")
+                    Slider(
+                        value = textSize,
+                        onValueChange = { textSize = it },
+                        valueRange = 0.5f..2.0f,
+                        steps = 29,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = { textSize = 1.0f }) {
+                        Text("Reset to default")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onTextSizeChange(textSize)
+                    onDismiss()
+                }) { Text("Apply") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTextSizeEditor = false }) { Text("Cancel") }
+            }
+        )
+    } else if (showLabelAlignmentPicker) {
+        app.cclauncher.ui.composables.LabelAlignmentDialog(
+            currentAlignment = folderItem.titleLabelAlignment,
+            onDismiss = { showLabelAlignmentPicker = false },
+            onAlignmentSelected = { alignment ->
+                onLabelAlignmentChange(alignment)
+                showLabelAlignmentPicker = false
+                onDismiss()
+            }
+        )
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -1044,6 +1169,8 @@ fun FolderContextMenu(
                         DropdownMenuItem(text = { Text("Move to page...") }, onClick = { showPageSelector = true })
                     }
                     DropdownMenuItem(text = { Text("Resize") }, onClick = { onResize(folderItem); onDismiss() })
+                    DropdownMenuItem(text = { Text("Text Size") }, onClick = { showTextSizeEditor = true })
+                    DropdownMenuItem(text = { Text("Label Alignment") }, onClick = { showLabelAlignmentPicker = true })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
                     DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemove(folderItem); onDismiss() })
                 }
