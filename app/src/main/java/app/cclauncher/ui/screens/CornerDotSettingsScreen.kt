@@ -35,8 +35,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,9 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import app.cclauncher.MainViewModel
+import app.cclauncher.settings.AppSettings
+import kotlinx.coroutines.delay
 import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
-import app.cclauncher.settings.AppSettings
 import app.cclauncher.settings.CornerDotConfig
 import app.cclauncher.ui.components.ColorPickerDialog
 import app.cclauncher.ui.viewmodels.SettingsViewModel
@@ -95,6 +98,14 @@ fun CornerDotSettingsScreen(
         }
     }
 
+    var previewCountdown by remember { mutableIntStateOf(0) }
+    LaunchedEffect(previewCountdown) {
+        if (previewCountdown > 0) {
+            delay(1_000)
+            previewCountdown--
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -107,14 +118,43 @@ fun CornerDotSettingsScreen(
             )
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
+        if (previewCountdown > 0) {
+            CornerDotLivePreview(settings = settings)
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+                // Preview button
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Preview on Screen", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                "Show dots in their actual positions for 3 seconds",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                            )
+                        }
+                        androidx.compose.material3.Button(
+                            onClick = { previewCountdown = 3 },
+                            enabled = previewCountdown == 0,
+                        ) {
+                            Text(if (previewCountdown > 0) "${previewCountdown}s" else "Preview")
+                        }
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                    Spacer(Modifier.height(4.dp))
+                }
+
                 // Apply to All toggle
                 item {
                     Row(
@@ -204,18 +244,10 @@ fun CornerDotSettingsScreen(
                 }
 
                 item { Spacer(Modifier.height(16.dp)) }
-            }
-
-            // Live preview — rendered in a Popup window at the true screen origin
-            CornerDotLivePreview(settings = settings)
         }
     }
 }
 
-/**
- * Renders non-interactive preview dots using a Popup anchored to the root window,
- * giving them the exact same coordinate space as the home screen corner dots.
- */
 @Composable
 private fun CornerDotLivePreview(settings: AppSettings) {
     val view = LocalView.current
@@ -233,7 +265,6 @@ private fun CornerDotLivePreview(settings: AppSettings) {
         offset = IntOffset.Zero,
         properties = PopupProperties(focusable = false, clippingEnabled = false),
     ) {
-        // Size the popup to the full display so alignment corners match the home screen exactly.
         val screenWidth = with(density) { view.rootView.width.toDp() }
         val screenHeight = with(density) { view.rootView.height.toDp() }
         if (screenWidth == 0.dp || screenHeight == 0.dp) return@Popup
@@ -251,7 +282,7 @@ private fun CornerDotLivePreview(settings: AppSettings) {
                 } else rawConfig
 
                 val dotColor = if (config.visible) Color(config.color).copy(alpha = config.opacity)
-                else Color.Transparent
+                else Color(config.color).copy(alpha = 0.4f) // show invisible dots faintly in preview
 
                 Box(
                     modifier = Modifier
@@ -261,7 +292,7 @@ private fun CornerDotLivePreview(settings: AppSettings) {
                         .clip(CircleShape)
                         .background(dotColor)
                         .then(
-                            if (config.borderEnabled && config.visible)
+                            if (config.borderEnabled)
                                 Modifier.border(
                                     config.borderWidth.dp,
                                     Color(config.borderColor).copy(alpha = config.opacity),

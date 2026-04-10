@@ -172,7 +172,7 @@ fun FolderDetailScreen(
 
             item {
                 Text(
-                    "App Text Size (Default): ${"%.1f".format(appTextSize)}",
+                    "App Text Size (Default): ${"%.2f".format(appTextSize)}",
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Slider(

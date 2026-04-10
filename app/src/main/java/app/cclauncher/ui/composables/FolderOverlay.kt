@@ -265,7 +265,7 @@ fun FolderOverlay(
                 title = { Text("Text Size") },
                 text = {
                     Column {
-                        Text("Size: ${"%.1f".format(textSize)}")
+                        Text("Size: ${"%.2f".format(textSize)}")
                         Slider(
                             value = textSize,
                             onValueChange = { textSize = it },
