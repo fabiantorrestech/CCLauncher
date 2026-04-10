@@ -369,7 +369,11 @@ fun HomeScreen(
                     folderItem = it,
                     pageCount = homeLayoutState.pageCount,
                     onDismiss = { showFolderContextMenu = null },
-                    onRemove = { folder ->
+                    onRemoveFromHome = { folder ->
+                        viewModel.setFolderShowOnHome(folder.id, false)
+                        showFolderContextMenu = null
+                    },
+                    onDelete = { folder ->
                         viewModel.removeFolder(folder)
                         showFolderContextMenu = null
                     },
@@ -1157,7 +1161,8 @@ fun FolderContextMenu(
     folderItem: HomeItem.Folder,
     pageCount: Int = 1,
     onDismiss: () -> Unit,
-    onRemove: (HomeItem.Folder) -> Unit,
+    onRemoveFromHome: (HomeItem.Folder) -> Unit,
+    onDelete: (HomeItem.Folder) -> Unit,
     onResize: (HomeItem.Folder) -> Unit,
     onMove: (HomeItem.Folder) -> Unit,
     onMoveToPage: (HomeItem.Folder, Int) -> Unit,
@@ -1169,6 +1174,7 @@ fun FolderContextMenu(
     var showRenameDialog by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf(folderItem.title) }
 
     if (showPageSelector) {
@@ -1245,6 +1251,22 @@ fun FolderContextMenu(
                 onDismiss()
             }
         )
+    } else if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Folder") },
+            text = { Text("Are you sure? This will permanently delete the folder and all its contents.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(folderItem)
+                    showDeleteConfirm = false
+                    onDismiss()
+                }) { Text("YES") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+            }
+        )
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -1259,7 +1281,8 @@ fun FolderContextMenu(
                     DropdownMenuItem(text = { Text("Text Size") }, onClick = { showTextSizeEditor = true })
                     DropdownMenuItem(text = { Text("Label Alignment") }, onClick = { showLabelAlignmentPicker = true })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
-                    DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemove(folderItem); onDismiss() })
+                    DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemoveFromHome(folderItem); onDismiss() })
+                    DropdownMenuItem(text = { Text("Delete") }, onClick = { showDeleteConfirm = true })
                 }
             },
             confirmButton = {
