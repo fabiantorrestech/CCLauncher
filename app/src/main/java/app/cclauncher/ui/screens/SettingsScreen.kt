@@ -18,12 +18,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,8 +36,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -46,7 +55,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
@@ -97,6 +110,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.reflect.KClass
+
+/**
+ * Represents each tab in the settings screen.
+ * Schema-driven categories use [SchemaCategory]; manual sections each get their own subclass.
+ */
+private sealed class SettingsTab(val title: String) {
+    data class SchemaCategory(val category: KClass<*>, val label: String) : SettingsTab(label)
+    data object Widgets : SettingsTab("Widgets")
+    data object Folders : SettingsTab("Folders")
+    data object PrivateSpace : SettingsTab("Private Space")
+    data object System : SettingsTab("System")
+    data object Backup : SettingsTab("Backup")
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -173,10 +199,69 @@ fun SettingsScreen(
     val isSettingPin by viewModel.isSettingPin.collectAsState()
     val refreshTrigger by mainViewModel.refreshTrigger.collectAsState()
 
+    // Search state
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     BackHandler(onBack = {
-        viewModel.resetUnlockState()
-        onNavigateBack()
+        if (isSearchActive) {
+            isSearchActive = false
+            searchQuery = ""
+        } else {
+            viewModel.resetUnlockState()
+            onNavigateBack()
+        }
     })
+
+    // Build ordered list of tabs — schema categories (excluding Folders) + manual sections
+    val grouped = remember(uiState) { schema.groupedByCategory() }
+    val tabs = remember(uiState) {
+        val list = mutableListOf<SettingsTab>()
+        for (category in schema.orderedCategories()) {
+            val fields = grouped[category].orEmpty()
+            if (fields.isEmpty()) continue
+            if (category.simpleName == "Folders") continue
+            val label = (category.simpleName ?: "Settings")
+                .lowercase()
+                .capitalize(Locale.getDefault())
+            list.add(SettingsTab.SchemaCategory(category, label))
+        }
+        list.add(SettingsTab.Widgets)
+        list.add(SettingsTab.Folders)
+        list.add(SettingsTab.PrivateSpace)
+        list.add(SettingsTab.System)
+        list.add(SettingsTab.Backup)
+        list
+    }
+
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+
+    // Build a flat searchable list: pairs of (field, categoryLabel) for schema fields
+    val searchableFields = remember(uiState) {
+        val result = mutableListOf<Pair<SettingField<AppSettings, *>, String>>()
+        for (category in schema.orderedCategories()) {
+            val fields = grouped[category].orEmpty()
+            val label = (category.simpleName ?: "Settings")
+                .lowercase()
+                .capitalize(Locale.getDefault())
+            for (field in fields) {
+                if (field.meta != null) result.add(field to label)
+            }
+        }
+        result
+    }
+
+    // ----- Shared callback for rendering a setting field's action (used by both pager and search) -----
+    val onFieldAction: (SettingField<AppSettings, *>, String) -> Unit = remember(uiState) {
+        { field, dialogType ->
+            currentField = field
+            showingDialog = dialogType
+        }
+    }
+
+    // ----- Dialogs (unchanged from original) -----
 
     if (showLockDialog) {
         SettingsLockDialog(
@@ -191,8 +276,6 @@ fun SettingsScreen(
                     coroutineScope.launch {
                         if (viewModel.validatePin(pin)) {
                             viewModel.setShowLockDialog(false)
-                        } else {
-                            // Show error (handled in dialog)
                         }
                     }
                 }
@@ -259,7 +342,6 @@ fun SettingsScreen(
                             val intValue = newValue.toInt()
 
                             when {
-                                // Grid size change
                                 (propertyName == "homeScreenRows" || propertyName == "homeScreenColumns") -> {
                                     if (viewModel.willGridChangeAffectItems(propertyName, intValue)) {
                                         pendingGridChange = propertyName to intValue
@@ -370,21 +452,64 @@ fun SettingsScreen(
         }
     }
 
+    // ----- Main Scaffold -----
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = {
+                    if (isSearchActive) {
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Search settings...") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(searchFocusRequester),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            )
+                        )
+                    } else {
+                        Text("Settings")
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = {
+                        if (isSearchActive) {
+                            isSearchActive = false
+                            searchQuery = ""
+                        } else {
+                            onNavigateBack()
+                        }
+                    }) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
+                },
+                actions = {
+                    if (isSearchActive) {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear")
+                            }
+                        }
+                    } else {
+                        IconButton(onClick = {
+                            isSearchActive = true
+                        }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search settings")
+                        }
+                    }
                 }
             )
         },
-//        containerColor = Color.Transparent
     ) { paddingValues ->
         if (viewModel.isLoading.value) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -446,461 +571,319 @@ fun SettingsScreen(
             return@Scaffold
         }
 
-        LazyColumn(
-            modifier = Modifier
+        // Focus the search field when it becomes active
+        LaunchedEffect(isSearchActive) {
+            if (isSearchActive) {
+                searchFocusRequester.requestFocus()
+                keyboardController?.show()
+            }
+        }
+
+        if (isSearchActive) {
+            // ----- Search results: flat filtered list -----
+            val query = searchQuery.trim().lowercase()
+            val filteredFields = remember(query, searchableFields) {
+                if (query.isEmpty()) searchableFields
+                else searchableFields.filter { (field, _) ->
+                    val meta = field.meta ?: return@filter false
+                    meta.title.lowercase().contains(query) ||
+                        meta.description.lowercase().contains(query)
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                if (filteredFields.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "No settings found",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    // Group filtered results by category for visual clarity
+                    val byCategory = filteredFields.groupBy { it.second }
+                    for ((categoryLabel, fields) in byCategory) {
+                        item(key = "search_cat_$categoryLabel") {
+                            SettingsSection(title = categoryLabel) {
+                                fields.forEach { (field, _) ->
+                                    key(field.name) {
+                                        SettingsFieldRenderer(
+                                            field = field,
+                                            uiState = uiState,
+                                            schema = schema,
+                                            coroutineScope = coroutineScope,
+                                            viewModel = viewModel,
+                                            context = context,
+                                            onShowDialog = onFieldAction,
+                                            onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // ----- Tabbed pager -----
+            Column(modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-        ) {
-            val grouped = schema.groupedByCategory()
-            val categories = schema.orderedCategories()
-
-            for (category: KClass<*> in categories) {
-                val categoryFields = grouped[category].orEmpty()
-                if (categoryFields.isEmpty()) continue
-                // Folders is rendered manually below so the settings and actions appear together
-                if (category.simpleName == "Folders") continue
-
-                item(key = "cat_${category.qualifiedName ?: category.simpleName}") {
-                    val title = (category.simpleName ?: "Settings")
-                        .lowercase()
-                        .capitalize(Locale.getDefault())
-
-                    SettingsSection(title = title) {
-                        categoryFields.forEach { field ->
-                            key(field.name) {
-                                val meta = field.meta
-                                val isEnabled = if (meta != null) schema.isEnabled(uiState, field) else false
-
-                                // Indent sub-settings: those that depend on another setting,
-                                // or those that are visually grouped under a parent but always enabled.
-                                val visuallyGroupedUnderParent = setOf(
-                                    "invertSearchResultsOrder",
-                                    "reverseAppListDirection",
+            ) {
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    edgePadding = 16.dp,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {},
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = {
+                                coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                            },
+                            text = {
+                                Text(
+                                    text = tab.title,
+                                    style = MaterialTheme.typography.labelLarge
                                 )
-                                val isSubSetting = meta?.dependsOn?.isNotBlank() == true
-                                    || field.name in visuallyGroupedUnderParent
+                            }
+                        )
+                    }
+                }
 
-                                if (meta != null) {
-                                    when (meta.type) {
-                                        Toggle::class -> {
-                                            val value = (field.get(uiState) as? Boolean) ?: false
-                                            SettingsToggle(
-                                                title = meta.title,
-                                                modifier = if (isSubSetting) Modifier.padding(start = 24.dp) else Modifier,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                isChecked = value,
-                                                enabled = isEnabled,
-                                                onCheckedChange = { checked ->
-                                                    coroutineScope.launch {
-                                                        viewModel.updateSetting(field.name, checked)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    beyondViewportPageCount = 0,
+                ) { pageIndex ->
+                    val tab = tabs[pageIndex]
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        when (tab) {
+                            is SettingsTab.SchemaCategory -> {
+                                val categoryFields = grouped[tab.category].orEmpty()
+                                item(key = "cat_${tab.title}") {
+                                    SettingsSection(title = tab.title) {
+                                        categoryFields.forEach { field ->
+                                            key(field.name) {
+                                                SettingsFieldRenderer(
+                                                    field = field,
+                                                    uiState = uiState,
+                                                    schema = schema,
+                                                    coroutineScope = coroutineScope,
+                                                    viewModel = viewModel,
+                                                    context = context,
+                                                    onShowDialog = onFieldAction,
+                                                    onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                                                        when (field.name) {
-                                                            "statusBar" -> {
-                                                                try {
-                                                                    (context as? Activity)?.let { activity ->
-                                                                        updateStatusBarVisibility(
-                                                                            activity,
-                                                                            checked
-                                                                        )
-                                                                    }
-                                                                } catch (e: Exception) {
-                                                                    e.printStackTrace()
-                                                                }
-                                                            }
+                            SettingsTab.Widgets -> {
+                                item(key = "widgets") {
+                                    SettingsSection(title = "Widgets") {
+                                        SettingsAction(
+                                            title = "Add Widget",
+                                            description = "Add a widget to your home screen",
+                                            onClick = {
+                                                coroutineScope.launch {
+                                                    viewModel.emitEvent(UiEvent.NavigateToWidgetPicker)
+                                                }
+                                            }
+                                        )
+                                    }
+                                }
+                            }
 
-                                                            "doubleTapToLock" -> {
-                                                                if (checked) {
-                                                                    showAccessibilityDisclosure =
-                                                                        true
-                                                                } else {
-                                                                    viewModel.updateSetting(
-                                                                        "doubleTapToLock",
-                                                                        false
-                                                                    )
-                                                                }
-                                                            }
-
-                                                            // Keep here if you later re-introduce a setting that controls orientation
-                                                            "forceLandscapeMode" -> {
-                                                                (context as? Activity)?.let { activity ->
-                                                                    activity.requestedOrientation =
-                                                                        if (checked) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                                                                        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                                                                }
+                            SettingsTab.Folders -> {
+                                val folderFields = grouped.entries
+                                    .find { it.key.simpleName == "Folders" }?.value.orEmpty()
+                                item(key = "folders") {
+                                    SettingsSection(title = "Folders") {
+                                        folderFields.forEach { field ->
+                                            val meta = field.meta ?: return@forEach
+                                            val isEnabled = schema.isEnabled(uiState, field)
+                                            when (meta.type) {
+                                                Toggle::class -> {
+                                                    val value = (field.get(uiState) as? Boolean) ?: false
+                                                    SettingsToggle(
+                                                        title = meta.title,
+                                                        description = meta.description.takeIf { it.isNotEmpty() },
+                                                        isChecked = value,
+                                                        enabled = isEnabled,
+                                                        onCheckedChange = { checked ->
+                                                            coroutineScope.launch {
+                                                                viewModel.updateSetting(field.name, checked)
                                                             }
                                                         }
-                                                    }
+                                                    )
                                                 }
-                                            )
+                                                Slider::class -> {
+                                                    val v = field.get(uiState)
+                                                    val subtitle = when (v) {
+                                                        is Float -> String.format(Locale.getDefault(), "%.1f", v)
+                                                        is Int -> v.toString()
+                                                        else -> ""
+                                                    }
+                                                    SettingsItem(
+                                                        title = meta.title,
+                                                        subtitle = subtitle,
+                                                        description = meta.description.takeIf { it.isNotEmpty() },
+                                                        enabled = isEnabled,
+                                                        onClick = {
+                                                            currentField = field
+                                                            showingDialog = "slider"
+                                                        }
+                                                    )
+                                                }
+                                                else -> {}
+                                            }
                                         }
+                                        SettingsAction(
+                                            title = "Add Folder",
+                                            description = "Create a new folder on your home screen",
+                                            onClick = {
+                                                newFolderName = ""
+                                                showCreateFolderDialog = true
+                                            }
+                                        )
+                                        SettingsAction(
+                                            title = "Manage Folders",
+                                            description = "View and configure existing folders",
+                                            onClick = onNavigateToFolderList
+                                        )
+                                    }
+                                }
+                            }
 
-                                        Slider::class -> {
-                                            val subtitle = when (val v = field.get(uiState)) {
-                                                is Int -> v.toString()
-                                                is Float -> String.format(
-                                                    Locale.getDefault(),
-                                                    "%.1f",
-                                                    v
-                                                )
+                            SettingsTab.PrivateSpace -> {
+                                item(key = "private_space_$refreshTrigger") {
+                                    SettingsSection(title = "Private Space") {
+                                        if (mainViewModel.isPrivateSpaceSupported) {
+                                            val privateSpaceState by mainViewModel.privateSpaceState.collectAsState()
 
-                                                is Double -> String.format(
-                                                    Locale.getDefault(),
-                                                    "%.1f",
-                                                    v
-                                                )
-
-                                                is Long -> v.toString()
+                                            val subtitle = when (privateSpaceState) {
+                                                MainViewModel.PrivateSpaceState.NotSetUp -> "Tap to set up or manage Private Space (needs to be the default launcher)"
+                                                MainViewModel.PrivateSpaceState.Locked -> "Tap to manage Private Space"
+                                                MainViewModel.PrivateSpaceState.Unlocked -> "Tap to manage Private Space"
                                                 else -> ""
                                             }
-
                                             SettingsItem(
-                                                title = meta.title,
+                                                title = "Private Space",
                                                 subtitle = subtitle,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    currentField = field
-                                                    showingDialog = "slider"
-                                                }
+                                                onClick = { mainViewModel.openPrivateSpaceSettings() }
                                             )
-                                        }
-
-
-                                        Dropdown::class -> {
-                                            val idx = (field.get(uiState) as? Int) ?: 0
-                                            val options = meta.options
-                                            val displayText = options.getOrNull(idx) ?: "Unknown"
-
+                                        } else {
                                             SettingsItem(
-                                                title = meta.title,
-                                                subtitle = displayText,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    currentField = field
-                                                    showingDialog = "dropdown"
-                                                }
-                                            )
-                                        }
-
-                                        Button::class -> {
-                                            SettingsAction(
-                                                title = meta.title,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    currentField = field
-                                                    showingDialog = "button"
-                                                }
-                                            )
-                                        }
-
-                                        AppPicker::class -> {
-                                            val pref = (field.get(uiState) as? AppPreference)
-                                                ?: AppPreference(label = "Not set")
-                                            SettingsItem(
-                                                title = meta.title,
-                                                subtitle = pref.label.ifBlank { "Not set" },
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    val selectionType = when (field.name) {
-                                                        "swipeLeftApp" -> AppSelectionType.SWIPE_LEFT_APP
-                                                        "swipeRightApp" -> AppSelectionType.SWIPE_RIGHT_APP
-                                                        "swipeUpApp" -> AppSelectionType.SWIPE_UP_APP
-                                                        "swipeDownApp" -> AppSelectionType.SWIPE_DOWN_APP
-                                                        else -> null
-                                                    }
-
-                                                    selectionType?.let {
-                                                        coroutineScope.launch {
-                                                            viewModel.emitEvent(
-                                                                UiEvent.NavigateToAppSelection(
-                                                                    it
-                                                                )
-                                                            )
-                                                        }
-                                                    }
-                                                }
-                                            )
-                                        }
-
-                                        IconPackPicker::class -> {
-                                            val iconCache = remember { IconCache(context) }
-                                            var availableIconPacks by remember {
-                                                mutableStateOf<List<IconPackManager.IconPackInfo>>(
-                                                    emptyList()
-                                                )
-                                            }
-                                            var showIconPackDialog by remember {
-                                                mutableStateOf(
-                                                    false
-                                                )
-                                            }
-
-                                            LaunchedEffect(Unit) {
-                                                availableIconPacks =
-                                                    iconCache.getAvailableIconPacks()
-                                            }
-
-                                            val selectedPackName =
-                                                (field.get(uiState) as? String) ?: "default"
-                                            val selectedPackDisplayName = availableIconPacks.find {
-                                                it.packageName == selectedPackName
-                                            }?.name ?: "Default Icons"
-
-                                            SettingsItem(
-                                                title = meta.title,
-                                                subtitle = selectedPackDisplayName,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = { showIconPackDialog = true }
-                                            )
-
-                                            if (showIconPackDialog) {
-                                                IconPackSelectionDialog(
-                                                    iconPacks = availableIconPacks,
-                                                    selectedPack = selectedPackName,
-                                                    onDismiss = { showIconPackDialog = false },
-                                                    onPackSelected = { selectedPack ->
-                                                        coroutineScope.launch {
-                                                            viewModel.updateSetting(
-                                                                field.name,
-                                                                selectedPack
-                                                            )
-                                                            iconCache.clearCache()
-                                                            showIconPackDialog = false
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        }
-
-                                        FontPicker::class -> {
-                                            val fontPath = (field.get(uiState) as? String).orEmpty()
-                                            val displayText = if (fontPath.isEmpty()) {
-                                                "System default"
-                                            } else {
-                                                fontPath.split("/").last()
-                                            }
-
-                                            SettingsItem(
-                                                title = meta.title,
-                                                subtitle = displayText,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    currentField = field
-                                                    showingDialog = "font_picker"
-                                                }
-                                            )
-                                        }
-
-                                        ColorPicker::class -> {
-                                            val colorValue = (field.get(uiState) as? Int) ?: 0
-                                            val displayText =
-                                                if (colorValue == 0) "Theme Default" else "Custom Color"
-
-                                            SettingsItem(
-                                                title = meta.title,
-                                                subtitle = displayText,
-                                                description = meta.description.takeIf { it.isNotEmpty() },
-                                                enabled = isEnabled,
-                                                onClick = {
-                                                    currentField = field
-                                                    showingDialog = "color_picker"
-                                                }
-                                            )
-                                        }
-
-                                        else -> {
-                                            // Unknown / custom type not handled
-                                            SettingsItem(
-                                                title = meta.title,
-                                                subtitle = "Unsupported setting type",
-                                                description = meta.description.takeIf { it.isNotEmpty() },
+                                                title = "Private Space",
+                                                subtitle = "Requires Android 15 or higher",
                                                 enabled = false,
-                                                onClick = {}
+                                                onClick = { },
+                                                transparency = 0.7f
                                             )
                                         }
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
 
-            item(key = "widgets") {
-                SettingsSection(title = "Widgets") {
-                    SettingsAction(
-                        title = "Add Widget",
-                        description = "Add a widget to your home screen",
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.emitEvent(UiEvent.NavigateToWidgetPicker)
-                            }
-                        }
-                    )
-                }
-            }
+                            SettingsTab.System -> {
+                                item(key = "system") {
+                                    SettingsSection(title = "System") {
+                                        SettingsItem(
+                                            title = "Set as Default Launcher",
+                                            subtitle = if (isClauncherDefault(context)) "CCLauncher is default" else "CCLauncher is not default",
+                                            onClick = {
+                                                val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                                                context.startActivity(intent)
+                                            },
+                                            transparency = if (isClauncherDefault(context)) 0.7f else 1.0f
+                                        )
 
-            item(key = "folders") {
-                val folderFields = grouped.entries.find { it.key.simpleName == "Folders" }?.value.orEmpty()
-                SettingsSection(title = "Folders") {
-                    folderFields.forEach { field ->
-                        val meta = field.meta ?: return@forEach
-                        val isEnabled = schema.isEnabled(uiState, field)
-                        when (meta.type) {
-                            Toggle::class -> {
-                                val value = (field.get(uiState) as? Boolean) ?: false
-                                SettingsToggle(
-                                    title = meta.title,
-                                    description = meta.description.takeIf { it.isNotEmpty() },
-                                    isChecked = value,
-                                    enabled = isEnabled,
-                                    onCheckedChange = { checked ->
-                                        coroutineScope.launch { viewModel.updateSetting(field.name, checked) }
+                                        SettingsToggle(
+                                            title = "Lock Settings",
+                                            description = "Prevent changes to settings without a PIN",
+                                            isChecked = uiState.lockSettings,
+                                            onCheckedChange = { locked ->
+                                                if (locked) {
+                                                    viewModel.setShowLockDialog(true, true)
+                                                } else {
+                                                    viewModel.toggleLockSettings(false)
+                                                }
+                                            }
+                                        )
+
+                                        SettingsItem(
+                                            title = "Hidden Apps",
+                                            onClick = onNavigateToHiddenApps
+                                        )
+
+                                        SettingsItem(
+                                            title = "App Info",
+                                            onClick = {
+                                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                                    data = Uri.fromParts("package", context.packageName, null)
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                context.startActivity(intent)
+                                            }
+                                        )
+
+                                        SettingsItem(
+                                            title = "About CCLauncher",
+                                            subtitle = "Version ${context.packageManager.getPackageInfo(context.packageName, 0).versionName}",
+                                            onClick = {
+                                                coroutineScope.launch {
+                                                    viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT))
+                                                }
+                                            }
+                                        )
                                     }
-                                )
-                            }
-                            Slider::class -> {
-                                val v = field.get(uiState)
-                                val subtitle = when (v) {
-                                    is Float -> String.format(Locale.getDefault(), "%.1f", v)
-                                    is Int -> v.toString()
-                                    else -> ""
                                 }
-                                SettingsItem(
-                                    title = meta.title,
-                                    subtitle = subtitle,
-                                    description = meta.description.takeIf { it.isNotEmpty() },
-                                    enabled = isEnabled,
-                                    onClick = { currentField = field; showingDialog = "slider" }
-                                )
                             }
-                            else -> {}
-                        }
-                    }
-                    SettingsAction(
-                        title = "Add Folder",
-                        description = "Create a new folder on your home screen",
-                        onClick = {
-                            newFolderName = ""
-                            showCreateFolderDialog = true
-                        }
-                    )
-                    SettingsAction(
-                        title = "Manage Folders",
-                        description = "View and configure existing folders",
-                        onClick = onNavigateToFolderList
-                    )
-                }
-            }
 
-            item(key = "private_space_$refreshTrigger") {
-                SettingsSection(title = "Private Space") {
-                    if (mainViewModel.isPrivateSpaceSupported) {
-                        val privateSpaceState by mainViewModel.privateSpaceState.collectAsState()
+                            SettingsTab.Backup -> {
+                                item(key = "backup") {
+                                    SettingsSection(title = "Backup") {
+                                        SettingsAction(
+                                            title = "Export Settings",
+                                            description = "Save your settings to a file",
+                                            onClick = {
+                                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                                                    .format(Date())
+                                                exportLauncher.launch("cclauncher_settings_$timestamp.json")
+                                            }
+                                        )
 
-                        val subtitle = when (privateSpaceState) {
-                            MainViewModel.PrivateSpaceState.NotSetUp -> "Tap to set up or manage Private Space (needs to be the default launcher)"
-                            MainViewModel.PrivateSpaceState.Locked -> "Tap to manage Private Space"
-                            MainViewModel.PrivateSpaceState.Unlocked -> "Tap to manage Private Space"
-                            else -> ""
+                                        SettingsAction(
+                                            title = "Import Settings",
+                                            description = "Restore settings from a backup file",
+                                            onClick = {
+                                                importLauncher.launch(arrayOf("application/json", "*/*"))
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
-                        SettingsItem(
-                            title = "Private Space",
-                            subtitle = subtitle,
-                            onClick = { mainViewModel.openPrivateSpaceSettings() }
-                        )
-                    } else {
-                        SettingsItem(
-                            title = "Private Space",
-                            subtitle = "Requires Android 15 or higher",
-                            enabled = false,
-                            onClick = { },
-                            transparency = 0.7f
-                        )
                     }
                 }
             }
-
-            item(key = "system") {
-                SettingsSection(title = "System") {
-                    SettingsItem(
-                        title = "Set as Default Launcher",
-                        subtitle = if (isClauncherDefault(context)) "CCLauncher is default" else "CCLauncher is not default",
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                            context.startActivity(intent)
-                        },
-                        transparency = if (isClauncherDefault(context)) 0.7f else 1.0f
-                    )
-
-                    SettingsToggle(
-                        title = "Lock Settings",
-                        description = "Prevent changes to settings without a PIN",
-                        isChecked = uiState.lockSettings,
-                        onCheckedChange = { locked ->
-                            if (locked) {
-                                viewModel.setShowLockDialog(true, true)
-                            } else {
-                                viewModel.toggleLockSettings(false)
-                            }
-                        }
-                    )
-
-                    SettingsItem(
-                        title = "Hidden Apps",
-                        onClick = onNavigateToHiddenApps
-                    )
-
-                    SettingsItem(
-                        title = "App Info",
-                        onClick = {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.fromParts("package", context.packageName, null)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        }
-                    )
-
-                    SettingsItem(
-                        title = "About CCLauncher",
-                        subtitle = "Version ${context.packageManager.getPackageInfo(context.packageName, 0).versionName}",
-                        onClick = {
-                            coroutineScope.launch {
-                                viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT))
-                            }
-                        }
-                    )
-                }
-            }
-
-            item(key = "backup") {
-                SettingsSection(title = "Backup") {
-                    SettingsAction(
-                        title = "Export Settings",
-                        description = "Save your settings to a file",
-                        onClick = {
-                            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                                .format(Date())
-                            exportLauncher.launch("cclauncher_settings_$timestamp.json")
-                        }
-                    )
-
-                    SettingsAction(
-                        title = "Import Settings",
-                        description = "Restore settings from a backup file",
-                        onClick = {
-                            importLauncher.launch(arrayOf("application/json", "*/*"))
-                        }
-                    )
-                }
-            }
-
         }
     }
 
@@ -914,7 +897,6 @@ fun SettingsScreen(
                 showAccessibilityDisclosure = false
                 coroutineScope.launch {
                     viewModel.updateSetting("doubleTapToLock", true)
-                    // Preserving your current behavior (even though it looks inverted)
                     viewModel.updateSetting("accessibilityConsent", false)
                 }
                 try {
@@ -978,6 +960,226 @@ fun SettingsScreen(
                 TextButton(onClick = { showCreateFolderDialog = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+/**
+ * Renders a single schema-driven setting field. Extracted to avoid duplicating the large
+ * when-block in both the pager pages and the search results list.
+ */
+@Composable
+private fun SettingsFieldRenderer(
+    field: SettingField<AppSettings, *>,
+    uiState: AppSettings,
+    schema: AppSettingsSchema,
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    viewModel: SettingsViewModel,
+    context: Context,
+    onShowDialog: (SettingField<AppSettings, *>, String) -> Unit,
+    onShowAccessibilityDisclosure: () -> Unit = {},
+) {
+    val meta = field.meta ?: return
+    val isEnabled = schema.isEnabled(uiState, field)
+
+    val visuallyGroupedUnderParent = setOf(
+        "invertSearchResultsOrder",
+        "reverseAppListDirection",
+    )
+    val isSubSetting = meta.dependsOn.isNotBlank()
+            || field.name in visuallyGroupedUnderParent
+
+    when (meta.type) {
+        Toggle::class -> {
+            val value = (field.get(uiState) as? Boolean) ?: false
+            SettingsToggle(
+                title = meta.title,
+                modifier = if (isSubSetting) Modifier.padding(start = 24.dp) else Modifier,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                isChecked = value,
+                enabled = isEnabled,
+                onCheckedChange = { checked ->
+                    coroutineScope.launch {
+                        viewModel.updateSetting(field.name, checked)
+
+                        when (field.name) {
+                            "statusBar" -> {
+                                try {
+                                    (context as? Activity)?.let { activity ->
+                                        updateStatusBarVisibility(activity, checked)
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+
+                            "doubleTapToLock" -> {
+                                if (checked) {
+                                    onShowAccessibilityDisclosure()
+                                } else {
+                                    viewModel.updateSetting("doubleTapToLock", false)
+                                }
+                            }
+
+                            "forceLandscapeMode" -> {
+                                (context as? Activity)?.let { activity ->
+                                    activity.requestedOrientation =
+                                        if (checked) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                }
+                            }
+                        }
+                    }
+                }
+            )
+        }
+
+        Slider::class -> {
+            val subtitle = when (val v = field.get(uiState)) {
+                is Int -> v.toString()
+                is Float -> String.format(Locale.getDefault(), "%.1f", v)
+                is Double -> String.format(Locale.getDefault(), "%.1f", v)
+                is Long -> v.toString()
+                else -> ""
+            }
+
+            SettingsItem(
+                title = meta.title,
+                subtitle = subtitle,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { onShowDialog(field, "slider") }
+            )
+        }
+
+        Dropdown::class -> {
+            val idx = (field.get(uiState) as? Int) ?: 0
+            val options = meta.options
+            val displayText = options.getOrNull(idx) ?: "Unknown"
+
+            SettingsItem(
+                title = meta.title,
+                subtitle = displayText,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { onShowDialog(field, "dropdown") }
+            )
+        }
+
+        Button::class -> {
+            SettingsAction(
+                title = meta.title,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { onShowDialog(field, "button") }
+            )
+        }
+
+        AppPicker::class -> {
+            val pref = (field.get(uiState) as? AppPreference)
+                ?: AppPreference(label = "Not set")
+            SettingsItem(
+                title = meta.title,
+                subtitle = pref.label.ifBlank { "Not set" },
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = {
+                    val selectionType = when (field.name) {
+                        "swipeLeftApp" -> AppSelectionType.SWIPE_LEFT_APP
+                        "swipeRightApp" -> AppSelectionType.SWIPE_RIGHT_APP
+                        "swipeUpApp" -> AppSelectionType.SWIPE_UP_APP
+                        "swipeDownApp" -> AppSelectionType.SWIPE_DOWN_APP
+                        else -> null
+                    }
+
+                    selectionType?.let {
+                        coroutineScope.launch {
+                            viewModel.emitEvent(UiEvent.NavigateToAppSelection(it))
+                        }
+                    }
+                }
+            )
+        }
+
+        IconPackPicker::class -> {
+            val iconCache = remember { IconCache(context) }
+            var availableIconPacks by remember {
+                mutableStateOf<List<IconPackManager.IconPackInfo>>(emptyList())
+            }
+            var showIconPackDialog by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                availableIconPacks = iconCache.getAvailableIconPacks()
+            }
+
+            val selectedPackName = (field.get(uiState) as? String) ?: "default"
+            val selectedPackDisplayName = availableIconPacks.find {
+                it.packageName == selectedPackName
+            }?.name ?: "Default Icons"
+
+            SettingsItem(
+                title = meta.title,
+                subtitle = selectedPackDisplayName,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { showIconPackDialog = true }
+            )
+
+            if (showIconPackDialog) {
+                IconPackSelectionDialog(
+                    iconPacks = availableIconPacks,
+                    selectedPack = selectedPackName,
+                    onDismiss = { showIconPackDialog = false },
+                    onPackSelected = { selectedPack ->
+                        coroutineScope.launch {
+                            viewModel.updateSetting(field.name, selectedPack)
+                            iconCache.clearCache()
+                            showIconPackDialog = false
+                        }
+                    }
+                )
+            }
+        }
+
+        FontPicker::class -> {
+            val fontPath = (field.get(uiState) as? String).orEmpty()
+            val displayText = if (fontPath.isEmpty()) {
+                "System default"
+            } else {
+                fontPath.split("/").last()
+            }
+
+            SettingsItem(
+                title = meta.title,
+                subtitle = displayText,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { onShowDialog(field, "font_picker") }
+            )
+        }
+
+        ColorPicker::class -> {
+            val colorValue = (field.get(uiState) as? Int) ?: 0
+            val displayText =
+                if (colorValue == 0) "Theme Default" else "Custom Color"
+
+            SettingsItem(
+                title = meta.title,
+                subtitle = displayText,
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = isEnabled,
+                onClick = { onShowDialog(field, "color_picker") }
+            )
+        }
+
+        else -> {
+            SettingsItem(
+                title = meta.title,
+                subtitle = "Unsupported setting type",
+                description = meta.description.takeIf { it.isNotEmpty() },
+                enabled = false,
+                onClick = {}
+            )
+        }
     }
 }
 
