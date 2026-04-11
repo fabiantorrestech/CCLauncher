@@ -59,6 +59,16 @@ object Constants {
         const val BOTTOM_RIGHT = 3
     }
 
+    enum class ZoneSwipeDir { LEFT, RIGHT, UP, DOWN }
+
+    /** Returns the swipe directions that are valid for a given corner (point into the screen interior). */
+    fun validSwipeDirs(cornerPos: Int): Set<ZoneSwipeDir> = when (cornerPos) {
+        CornerPosition.TOP_LEFT     -> setOf(ZoneSwipeDir.RIGHT, ZoneSwipeDir.DOWN)
+        CornerPosition.TOP_RIGHT    -> setOf(ZoneSwipeDir.LEFT, ZoneSwipeDir.DOWN)
+        CornerPosition.BOTTOM_LEFT  -> setOf(ZoneSwipeDir.RIGHT, ZoneSwipeDir.UP)
+        else                        -> setOf(ZoneSwipeDir.LEFT, ZoneSwipeDir.UP) // BOTTOM_RIGHT
+    }
+
     object GridSize {
         const val MIN_ROWS = 4
         const val MAX_ROWS = 12

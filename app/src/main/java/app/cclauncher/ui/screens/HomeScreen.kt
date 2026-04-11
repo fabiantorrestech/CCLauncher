@@ -57,13 +57,24 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import android.graphics.Rect as AndroidRect
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
 import app.cclauncher.settings.CornerZoneConfig
+import kotlin.math.abs
+import kotlinx.coroutines.withTimeout
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
@@ -1182,11 +1193,19 @@ private fun calculateGridPosition(
     } else null
 }
 
+/** Dwell time (ms) required before a swipe-up is recognised on bottom corner zones.
+ *  Bottom zones sit on top of Android's home-gesture strip; requiring a brief press
+ *  differentiates an intentional zone swipe from the system's quick-flick home gesture. */
+private const val BOTTOM_ZONE_SWIPE_UP_DWELL_MS = 120L
+
 /**
  * Renders the 4 corner shortcut zones overlaid on the home screen.
  * Each zone is a right triangle anchored at its screen corner with a 45° hypotenuse.
  * Zones with [CornerZoneConfig.visible] == false are transparent but still receive touches.
  * Zones with [CornerZoneConfig.enabled] == false are skipped entirely.
+ *
+ * Registers system gesture exclusion rects so Android's back-gesture does not fire
+ * inside the active zone areas.
  */
 @Composable
 private fun HomeCornerZones(
@@ -1194,6 +1213,25 @@ private fun HomeCornerZones(
     onOpenFolder: (String) -> Unit,
     onAction: (Int) -> Unit,
 ) {
+    val view = LocalView.current
+    // cornerPos → exclusion rect; updated by each zone via onGloballyPositioned
+    val exclusionRects = remember { mutableMapOf<Int, AndroidRect>() }
+
+    fun pushExclusionRects() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            view.post { view.systemGestureExclusionRects = exclusionRects.values.toList() }
+        }
+    }
+
+    // Clear all exclusion rects when the composable leaves composition
+    DisposableEffect(Unit) {
+        onDispose {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                view.post { view.systemGestureExclusionRects = emptyList() }
+            }
+        }
+    }
+
     val zones = listOf(
         settings.cornerZoneTopLeft,
         settings.cornerZoneTopRight,
@@ -1209,7 +1247,11 @@ private fun HomeCornerZones(
 
     Box(modifier = Modifier.fillMaxSize()) {
         zones.forEachIndexed { cornerPos, rawConfig ->
-            if (!rawConfig.enabled) return@forEachIndexed
+            if (!rawConfig.enabled) {
+                // Zone disabled — remove its rect so the system gesture is no longer blocked
+                if (exclusionRects.remove(cornerPos) != null) pushExclusionRects()
+                return@forEachIndexed
+            }
             val config = if (settings.applyToAllCornerZones) {
                 val u = settings.cornerZoneUniversal
                 rawConfig.copy(
@@ -1222,6 +1264,11 @@ private fun HomeCornerZones(
                 config = config,
                 alignment = alignments[cornerPos],
                 cornerPos = cornerPos,
+                onBoundsChanged = { rect ->
+                    if (rect != null) exclusionRects[cornerPos] = rect
+                    else exclusionRects.remove(cornerPos)
+                    pushExclusionRects()
+                },
                 onTap = {
                     when (config.action) {
                         Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(config.folderId)
@@ -1236,9 +1283,31 @@ private fun HomeCornerZones(
                         }
                     }
                 },
+                onSwipe = { dir ->
+                    val swipeCfg = when (dir) {
+                        Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+                        Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+                        Constants.ZoneSwipeDir.UP    -> config.swipeUp
+                        Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+                    }
+                    if (swipeCfg.enabled) {
+                        when (swipeCfg.action) {
+                            Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(swipeCfg.folderId)
+                            else -> onAction(swipeCfg.action)
+                        }
+                    }
+                },
             )
         }
     }
+}
+
+private sealed class ZoneGestureResult {
+    data object None : ZoneGestureResult()
+    data object Tap : ZoneGestureResult()
+    data object LongPress : ZoneGestureResult()
+    /** [elapsedMs] = millis between down and swipe-threshold being crossed. */
+    data class Swipe(val delta: Offset, val elapsedMs: Long) : ZoneGestureResult()
 }
 
 @Composable
@@ -1246,8 +1315,10 @@ private fun BoxScope.CornerZoneElement(
     config: CornerZoneConfig,
     alignment: Alignment,
     cornerPos: Int,
+    onBoundsChanged: (AndroidRect?) -> Unit,
     onTap: () -> Unit,
     onHold: () -> Unit,
+    onSwipe: (Constants.ZoneSwipeDir) -> Unit,
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -1271,30 +1342,95 @@ private fun BoxScope.CornerZoneElement(
         else                                 -> TransformOrigin(1f, 1f)
     }
 
+    val validDirs = remember(cornerPos) { Constants.validSwipeDirs(cornerPos) }
+    val isBottomZone = cornerPos == Constants.CornerPosition.BOTTOM_LEFT ||
+                       cornerPos == Constants.CornerPosition.BOTTOM_RIGHT
+
+    // Remove this zone's exclusion rect when it leaves composition
+    DisposableEffect(Unit) {
+        onDispose { onBoundsChanged(null) }
+    }
+
     Box(
         modifier = Modifier
             .align(alignment)
             .size(config.size.dp)
             .graphicsLayer(scaleX = scale, scaleY = scale, transformOrigin = transformOrigin)
-            .pointerInput(config.action, config.holdEnabled, config.holdAction) {
-                detectTapGestures(
-                    onPress = { offset ->
-                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) {
-                            isPressed = true
-                            tryAwaitRelease()
-                            isPressed = false
-                        }
-                    },
-                    onTap = { offset ->
-                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) onTap()
-                    },
-                    onLongPress = { offset ->
-                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) {
-                            isPressed = false
-                            onHold()
-                        }
-                    },
+            // Register exclusion rect so Android's back-gesture won't fire over the zone
+            .onGloballyPositioned { coords ->
+                val b = coords.boundsInWindow()
+                onBoundsChanged(
+                    AndroidRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
                 )
+            }
+            .pointerInput(
+                config.action, config.holdEnabled, config.holdAction,
+                config.swipeLeft, config.swipeRight, config.swipeUp, config.swipeDown,
+                config.holdDurationMs, config.swipeDwellMs,
+            ) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (!isInsideZoneTriangle(down.position, size.width.toFloat(), cornerPos)) return@awaitEachGesture
+
+                    // Claim the down event so the home screen's swipe handler ignores it
+                    down.consume()
+                    isPressed = true
+                    val startTime = System.currentTimeMillis()
+                    val startPos = down.position
+                    var result: ZoneGestureResult = ZoneGestureResult.None
+
+                    try {
+                        withTimeout(config.holdDurationMs.toLong()) {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull() ?: break
+                                // Consume every movement event — prevents launcher swipe handlers
+                                // further up the composition tree from also firing
+                                change.consume()
+                                if (!change.pressed) {
+                                    result = ZoneGestureResult.Tap
+                                    break
+                                }
+                                val delta = change.position - startPos
+                                if (delta.getDistance() > viewConfiguration.touchSlop * 3) {
+                                    result = ZoneGestureResult.Swipe(
+                                        delta = delta,
+                                        elapsedMs = System.currentTimeMillis() - startTime,
+                                    )
+                                    break
+                                }
+                            }
+                        }
+                    } catch (_: PointerEventTimeoutCancellationException) {
+                        result = ZoneGestureResult.LongPress
+                    }
+
+                    isPressed = false
+
+                    when (val r = result) {
+                        is ZoneGestureResult.Tap -> onTap()
+                        is ZoneGestureResult.LongPress -> onHold()
+                        is ZoneGestureResult.Swipe -> {
+                            val dir = classifyZoneSwipeDir(r.delta)
+                            // Compute the required dwell for this direction.
+                            // Bottom-zone swipe-up is always clamped to at least
+                            // BOTTOM_ZONE_SWIPE_UP_DWELL_MS to resist Android's home gesture.
+                            val requiredDwell = if (isBottomZone && dir == Constants.ZoneSwipeDir.UP)
+                                maxOf(BOTTOM_ZONE_SWIPE_UP_DWELL_MS, config.swipeDwellMs.toLong())
+                            else
+                                config.swipeDwellMs.toLong()
+                            if (dir != null && dir in validDirs && r.elapsedMs >= requiredDwell) {
+                                onSwipe(dir)
+                            }
+                        }
+                        ZoneGestureResult.None -> {}
+                    }
+
+                    // Drain remaining events until the finger lifts
+                    while (currentEvent.changes.any { it.pressed }) {
+                        awaitPointerEvent().changes.forEach { it.consume() }
+                    }
+                }
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1304,6 +1440,15 @@ private fun BoxScope.CornerZoneElement(
                 drawPath(path, color = strokeColor, style = Stroke(width = borderWidthDp.toPx()))
             }
         }
+    }
+}
+
+private fun classifyZoneSwipeDir(delta: Offset): Constants.ZoneSwipeDir? {
+    if (delta.getDistance() < 5f) return null
+    return if (abs(delta.x) >= abs(delta.y)) {
+        if (delta.x > 0) Constants.ZoneSwipeDir.RIGHT else Constants.ZoneSwipeDir.LEFT
+    } else {
+        if (delta.y > 0) Constants.ZoneSwipeDir.DOWN else Constants.ZoneSwipeDir.UP
     }
 }
 

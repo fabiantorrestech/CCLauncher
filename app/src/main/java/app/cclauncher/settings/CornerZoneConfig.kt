@@ -20,6 +20,19 @@ data class CornerZoneConfig(
     val holdFolderId: String = "",
     /** App preference used when holdAction == APP. */
     val holdAppPreference: AppPreference = AppPreference(),
+    /** Swipe actions — only directions valid for this corner's screen position are used. */
+    val swipeLeft: ZoneSwipeConfig = ZoneSwipeConfig(),
+    val swipeRight: ZoneSwipeConfig = ZoneSwipeConfig(),
+    val swipeUp: ZoneSwipeConfig = ZoneSwipeConfig(),
+    val swipeDown: ZoneSwipeConfig = ZoneSwipeConfig(),
+    /**
+     * Minimum press duration (ms) before a swipe gesture on this zone is recognised.
+     * On bottom zones, the effective minimum for swipe-up is also clamped to 120 ms to
+     * reduce conflict with Android's home gesture regardless of this value.
+     */
+    val swipeDwellMs: Int = 0,
+    /** How long (ms) the zone must be held to fire the hold action (default 500 ms). */
+    val holdDurationMs: Int = 500,
     /** Leg length of the right-triangle zone in dp (both legs equal → 45° hypotenuse). */
     val size: Float = 80f,
     /** ARGB color int for the triangle fill. */

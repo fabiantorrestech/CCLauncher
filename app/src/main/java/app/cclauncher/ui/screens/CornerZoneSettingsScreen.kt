@@ -50,6 +50,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
@@ -61,6 +63,7 @@ import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.settings.CornerZoneConfig
+import app.cclauncher.settings.ZoneSwipeConfig
 import app.cclauncher.ui.components.ColorPickerDialog
 import app.cclauncher.ui.viewmodels.SettingsViewModel
 import kotlinx.coroutines.delay
@@ -69,6 +72,13 @@ import org.koin.androidx.compose.koinViewModel
 
 private val CORNER_LABELS = listOf("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
 private val ZONE_ACTION_LABELS = listOf("None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder")
+
+private val SWIPE_DIR_LABELS = mapOf(
+    Constants.ZoneSwipeDir.LEFT  to "Swipe Left",
+    Constants.ZoneSwipeDir.RIGHT to "Swipe Right",
+    Constants.ZoneSwipeDir.UP    to "Swipe Up",
+    Constants.ZoneSwipeDir.DOWN  to "Swipe Down",
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -132,6 +142,37 @@ fun CornerZoneSettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Home gesture warning — always shown so users are aware before configuring bottom zones
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "⚠ Bottom Zone Limitation",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Swipe-up actions on Bottom-Left and Bottom-Right zones may conflict " +
+                            "with Android's system home gesture. Increase the Swipe Press Dwell " +
+                            "on those zones (120 ms+) to reduce interference, or leave swipe-up " +
+                            "unassigned on bottom corners.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+            }
+
             // Preview button
             item {
                 Row(
@@ -227,6 +268,7 @@ fun CornerZoneSettingsScreen(
                     CornerZoneMinimalCard(
                         label = CORNER_LABELS[corner],
                         config = cornerConfigs[corner],
+                        cornerPos = corner,
                         allFolders = allFolders,
                         onUpdate = { updated -> updateCornerConfig(corner, updated) },
                     )
@@ -327,6 +369,8 @@ private fun CornerZoneCard(
     var showFolderPicker by remember { mutableStateOf(false) }
     var showHoldActionPicker by remember { mutableStateOf(false) }
     var showHoldFolderPicker by remember { mutableStateOf(false) }
+    var swipePickerDir by remember { mutableStateOf<Constants.ZoneSwipeDir?>(null) }
+    var swipeFolderDir by remember { mutableStateOf<Constants.ZoneSwipeDir?>(null) }
     var showColorPicker by remember { mutableStateOf(false) }
     var showBorderColorPicker by remember { mutableStateOf(false) }
     var folderSearch by remember { mutableStateOf("") }
@@ -402,7 +446,7 @@ private fun CornerZoneCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Hold Action", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Fires after 500 ms long-press",
+                        "Fires after ${config.holdDurationMs} ms long-press",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
@@ -412,6 +456,18 @@ private fun CornerZoneCard(
                     onCheckedChange = { onUpdate(config.copy(holdEnabled = it)) },
                 )
             }
+
+            Text(
+                "Hold Duration: ${config.holdDurationMs} ms",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+            Slider(
+                value = config.holdDurationMs.toFloat(),
+                onValueChange = { onUpdate(config.copy(holdDurationMs = it.toInt())) },
+                valueRange = 200f..2000f,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             if (config.holdEnabled) {
                 Spacer(Modifier.height(4.dp))
@@ -445,11 +501,86 @@ private fun CornerZoneCard(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
+            // Swipe actions — only valid directions for this corner are shown
+            Text("Swipe Actions", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Only directions pointing into the screen are available",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+
+            val isBottomCorner = cornerPos == Constants.CornerPosition.BOTTOM_LEFT ||
+                                 cornerPos == Constants.CornerPosition.BOTTOM_RIGHT
+            val dwellLabel = if (config.swipeDwellMs == 0) "Swipe Press Dwell: instant"
+                             else "Swipe Press Dwell: ${config.swipeDwellMs} ms"
+            val dwellSubLabel = if (isBottomCorner)
+                "Minimum dwell before any swipe fires (bottom zones: swipe-up always uses at least 120 ms)"
+            else
+                "Minimum hold time before a swipe is recognised (0 = instant)"
+            Spacer(Modifier.height(4.dp))
+            Text(dwellLabel, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            Text(dwellSubLabel, style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            Slider(
+                value = config.swipeDwellMs.toFloat(),
+                onValueChange = { onUpdate(config.copy(swipeDwellMs = it.toInt())) },
+                valueRange = 0f..500f,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(4.dp))
+
+            Constants.validSwipeDirs(cornerPos).forEach { dir ->
+                val swipeCfg = when (dir) {
+                    Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+                    Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+                    Constants.ZoneSwipeDir.UP    -> config.swipeUp
+                    Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+                }
+                val dirLabel = SWIPE_DIR_LABELS[dir] ?: dir.name
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(dirLabel, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { swipePickerDir = dir }) {
+                        Text(
+                            if (swipeCfg.enabled) ZONE_ACTION_LABELS.getOrElse(swipeCfg.action) { "Unknown" }
+                            else "Disabled"
+                        )
+                    }
+                }
+                if (swipeCfg.enabled && swipeCfg.action == Constants.SwipeAction.OPEN_FOLDER) {
+                    val title = allFolders.find { it.id == swipeCfg.folderId }?.title ?: "Not set"
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Folder", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { folderSearch = ""; swipeFolderDir = dir }) {
+                            Text(title)
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             ZoneAppearanceControls(
                 config = config,
                 onUpdate = onUpdate,
                 onShowColorPicker = { showColorPicker = true },
                 onShowBorderColorPicker = { showBorderColorPicker = true },
+                onResetAppearance = {
+                    val d = CornerZoneConfig()
+                    onUpdate(config.copy(
+                        size = d.size, color = d.color, opacity = d.opacity, visible = d.visible,
+                        borderEnabled = d.borderEnabled, borderColor = d.borderColor, borderWidth = d.borderWidth,
+                    ))
+                },
             )
         }
     }
@@ -461,6 +592,8 @@ private fun CornerZoneCard(
         showFolderPicker = showFolderPicker,
         showHoldActionPicker = showHoldActionPicker,
         showHoldFolderPicker = showHoldFolderPicker,
+        swipePickerDir = swipePickerDir,
+        swipeFolderDir = swipeFolderDir,
         showColorPicker = showColorPicker,
         showBorderColorPicker = showBorderColorPicker,
         folderSearch = folderSearch,
@@ -469,6 +602,8 @@ private fun CornerZoneCard(
         onDismissFolderPicker = { showFolderPicker = false },
         onDismissHoldActionPicker = { showHoldActionPicker = false },
         onDismissHoldFolderPicker = { showHoldFolderPicker = false },
+        onDismissSwipePicker = { swipePickerDir = null },
+        onDismissSwipeFolderPicker = { swipeFolderDir = null },
         onDismissColorPicker = { showColorPicker = false },
         onDismissBorderColorPicker = { showBorderColorPicker = false },
         onUpdate = onUpdate,
@@ -480,6 +615,7 @@ private fun CornerZoneCard(
 private fun CornerZoneMinimalCard(
     label: String,
     config: CornerZoneConfig,
+    cornerPos: Int,
     allFolders: List<HomeItem.Folder>,
     onUpdate: (CornerZoneConfig) -> Unit,
 ) {
@@ -487,6 +623,8 @@ private fun CornerZoneMinimalCard(
     var showFolderPicker by remember { mutableStateOf(false) }
     var showHoldActionPicker by remember { mutableStateOf(false) }
     var showHoldFolderPicker by remember { mutableStateOf(false) }
+    var swipePickerDir by remember { mutableStateOf<Constants.ZoneSwipeDir?>(null) }
+    var swipeFolderDir by remember { mutableStateOf<Constants.ZoneSwipeDir?>(null) }
     var folderSearch by remember { mutableStateOf("") }
 
     Card(
@@ -593,6 +731,52 @@ private fun CornerZoneMinimalCard(
                     }
                 }
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Swipe actions
+            Text("Swipe Actions", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Only directions pointing into the screen are available",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+            Spacer(Modifier.height(4.dp))
+            Constants.validSwipeDirs(cornerPos).forEach { dir ->
+                val swipeCfg = when (dir) {
+                    Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+                    Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+                    Constants.ZoneSwipeDir.UP    -> config.swipeUp
+                    Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+                }
+                val dirLabel = SWIPE_DIR_LABELS[dir] ?: dir.name
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(dirLabel, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { swipePickerDir = dir }) {
+                        Text(
+                            if (swipeCfg.enabled) ZONE_ACTION_LABELS.getOrElse(swipeCfg.action) { "Unknown" }
+                            else "Disabled"
+                        )
+                    }
+                }
+                if (swipeCfg.enabled && swipeCfg.action == Constants.SwipeAction.OPEN_FOLDER) {
+                    val title = allFolders.find { it.id == swipeCfg.folderId }?.title ?: "Not set"
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Folder", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { folderSearch = ""; swipeFolderDir = dir }) {
+                            Text(title)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -627,6 +811,44 @@ private fun CornerZoneMinimalCard(
         onDismiss = { showHoldFolderPicker = false },
         onSelect = { onUpdate(config.copy(holdFolderId = it)); showHoldFolderPicker = false },
     )
+    // Swipe direction action picker
+    swipePickerDir?.let { dir ->
+        val currentSwipeCfg = when (dir) {
+            Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+            Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+            Constants.ZoneSwipeDir.UP    -> config.swipeUp
+            Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+        }
+        SwipeActionPickerDialog(
+            dir = dir,
+            currentCfg = currentSwipeCfg,
+            onDismiss = { swipePickerDir = null },
+            onSelect = { newCfg ->
+                onUpdate(updateSwipeCfg(config, dir, newCfg))
+                swipePickerDir = null
+            },
+        )
+    }
+    swipeFolderDir?.let { dir ->
+        val currentSwipeCfg = when (dir) {
+            Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+            Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+            Constants.ZoneSwipeDir.UP    -> config.swipeUp
+            Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+        }
+        FolderPickerDialog(
+            show = true,
+            currentFolderId = currentSwipeCfg.folderId,
+            allFolders = allFolders,
+            folderSearch = folderSearch,
+            onSearchChange = { folderSearch = it },
+            onDismiss = { swipeFolderDir = null },
+            onSelect = { fid ->
+                onUpdate(updateSwipeCfg(config, dir, currentSwipeCfg.copy(folderId = fid)))
+                swipeFolderDir = null
+            },
+        )
+    }
 }
 
 // Appearance-only card — used as universal control when "Apply to All" is ON
@@ -659,6 +881,13 @@ private fun CornerZoneAppearanceCard(
                 onUpdate = onUpdate,
                 onShowColorPicker = { showColorPicker = true },
                 onShowBorderColorPicker = { showBorderColorPicker = true },
+                onResetAppearance = {
+                    val d = CornerZoneConfig()
+                    onUpdate(config.copy(
+                        size = d.size, color = d.color, opacity = d.opacity, visible = d.visible,
+                        borderEnabled = d.borderEnabled, borderColor = d.borderColor, borderWidth = d.borderWidth,
+                    ))
+                },
             )
         }
     }
@@ -713,7 +942,24 @@ private fun ZoneAppearanceControls(
     onUpdate: (CornerZoneConfig) -> Unit,
     onShowColorPicker: () -> Unit,
     onShowBorderColorPicker: () -> Unit,
+    onResetAppearance: (() -> Unit)? = null,
 ) {
+    if (onResetAppearance != null) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onResetAppearance) {
+                Text(
+                    "↺ Reset to Defaults",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                )
+            }
+        }
+    }
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -912,6 +1158,8 @@ private fun CornerZoneDialogs(
     showFolderPicker: Boolean,
     showHoldActionPicker: Boolean,
     showHoldFolderPicker: Boolean,
+    swipePickerDir: Constants.ZoneSwipeDir?,
+    swipeFolderDir: Constants.ZoneSwipeDir?,
     showColorPicker: Boolean,
     showBorderColorPicker: Boolean,
     folderSearch: String,
@@ -920,6 +1168,8 @@ private fun CornerZoneDialogs(
     onDismissFolderPicker: () -> Unit,
     onDismissHoldActionPicker: () -> Unit,
     onDismissHoldFolderPicker: () -> Unit,
+    onDismissSwipePicker: () -> Unit,
+    onDismissSwipeFolderPicker: () -> Unit,
     onDismissColorPicker: () -> Unit,
     onDismissBorderColorPicker: () -> Unit,
     onUpdate: (CornerZoneConfig) -> Unit,
@@ -954,6 +1204,44 @@ private fun CornerZoneDialogs(
         onDismiss = onDismissHoldFolderPicker,
         onSelect = { onUpdate(config.copy(holdFolderId = it)); onDismissHoldFolderPicker() },
     )
+    // Swipe direction picker
+    swipePickerDir?.let { dir ->
+        val currentSwipeCfg = when (dir) {
+            Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+            Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+            Constants.ZoneSwipeDir.UP    -> config.swipeUp
+            Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+        }
+        SwipeActionPickerDialog(
+            dir = dir,
+            currentCfg = currentSwipeCfg,
+            onDismiss = onDismissSwipePicker,
+            onSelect = { newCfg ->
+                onUpdate(updateSwipeCfg(config, dir, newCfg))
+                onDismissSwipePicker()
+            },
+        )
+    }
+    swipeFolderDir?.let { dir ->
+        val currentSwipeCfg = when (dir) {
+            Constants.ZoneSwipeDir.LEFT  -> config.swipeLeft
+            Constants.ZoneSwipeDir.RIGHT -> config.swipeRight
+            Constants.ZoneSwipeDir.UP    -> config.swipeUp
+            Constants.ZoneSwipeDir.DOWN  -> config.swipeDown
+        }
+        FolderPickerDialog(
+            show = true,
+            currentFolderId = currentSwipeCfg.folderId,
+            allFolders = allFolders,
+            folderSearch = folderSearch,
+            onSearchChange = onFolderSearchChange,
+            onDismiss = onDismissSwipeFolderPicker,
+            onSelect = { fid ->
+                onUpdate(updateSwipeCfg(config, dir, currentSwipeCfg.copy(folderId = fid)))
+                onDismissSwipeFolderPicker()
+            },
+        )
+    }
     if (showColorPicker) {
         ColorPickerDialog(
             title = "Zone Color",
@@ -976,6 +1264,65 @@ private fun CornerZoneDialogs(
             }
         )
     }
+}
+
+/**
+ * Dialog for configuring a swipe direction on a corner zone.
+ * Shows a "Disabled" option plus the full action list. Selecting an action enables the swipe;
+ * selecting "Disabled" turns it off.
+ */
+@Composable
+private fun SwipeActionPickerDialog(
+    dir: Constants.ZoneSwipeDir,
+    currentCfg: ZoneSwipeConfig,
+    onDismiss: () -> Unit,
+    onSelect: (ZoneSwipeConfig) -> Unit,
+) {
+    val dirLabel = SWIPE_DIR_LABELS[dir] ?: dir.name
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$dirLabel Action") },
+        text = {
+            Column {
+                // "Disabled" entry
+                ListItem(
+                    headlineContent = { Text("Disabled") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (!currentCfg.enabled) Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier)
+                        .clickable { onSelect(currentCfg.copy(enabled = false, action = Constants.SwipeAction.NULL)) }
+                )
+                HorizontalDivider()
+                ZONE_ACTION_LABELS.forEachIndexed { index, label ->
+                    if (index == Constants.SwipeAction.NULL) return@forEachIndexed
+                    ListItem(
+                        headlineContent = { Text(label) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (currentCfg.enabled && currentCfg.action == index)
+                                    Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                                else Modifier
+                            )
+                            .clickable { onSelect(currentCfg.copy(enabled = true, action = index)) }
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+/** Updates the correct swipe config field on [config] for the given [dir]. */
+private fun updateSwipeCfg(
+    config: CornerZoneConfig,
+    dir: Constants.ZoneSwipeDir,
+    newSwipeCfg: ZoneSwipeConfig,
+): CornerZoneConfig = when (dir) {
+    Constants.ZoneSwipeDir.LEFT  -> config.copy(swipeLeft  = newSwipeCfg)
+    Constants.ZoneSwipeDir.RIGHT -> config.copy(swipeRight = newSwipeCfg)
+    Constants.ZoneSwipeDir.UP    -> config.copy(swipeUp    = newSwipeCfg)
+    Constants.ZoneSwipeDir.DOWN  -> config.copy(swipeDown  = newSwipeCfg)
 }
 
 private fun buildPreviewTrianglePath(size: Float, cornerPos: Int): Path = Path().apply {
