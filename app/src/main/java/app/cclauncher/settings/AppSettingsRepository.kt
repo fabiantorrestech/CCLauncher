@@ -91,25 +91,25 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         }
     }
 
-    suspend fun updateCornerDotConfig(corner: Int, config: CornerDotConfig) {
+    suspend fun updateCornerZoneConfig(corner: Int, config: CornerZoneConfig) {
         repo.update { s ->
             when (corner) {
-                app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(cornerDotTopLeft = config)
-                app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(cornerDotTopRight = config)
-                app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(cornerDotBottomLeft = config)
-                app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(cornerDotBottomRight = config)
+                app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(cornerZoneTopLeft = config)
+                app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(cornerZoneTopRight = config)
+                app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(cornerZoneBottomLeft = config)
+                app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(cornerZoneBottomRight = config)
                 else -> s
             }
         }
     }
 
-    suspend fun updateUniversalCornerDotConfig(config: CornerDotConfig) {
-        repo.update { it.copy(cornerDotUniversal = config) }
+    suspend fun updateUniversalCornerZoneConfig(config: CornerZoneConfig) {
+        repo.update { it.copy(cornerZoneUniversal = config) }
     }
 
-    suspend fun updateAllCornerDotAppearance(sourceConfig: CornerDotConfig) {
+    suspend fun updateAllCornerZoneAppearance(sourceConfig: CornerZoneConfig) {
         repo.update { s ->
-            val applyAppearance = { target: CornerDotConfig ->
+            val applyAppearance = { target: CornerZoneConfig ->
                 if (target.enabled) target.copy(
                     size = sourceConfig.size,
                     color = sourceConfig.color,
@@ -118,14 +118,13 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
                     borderEnabled = sourceConfig.borderEnabled,
                     borderColor = sourceConfig.borderColor,
                     borderWidth = sourceConfig.borderWidth,
-                    inset = sourceConfig.inset,
                 ) else target
             }
             s.copy(
-                cornerDotTopLeft = applyAppearance(s.cornerDotTopLeft),
-                cornerDotTopRight = applyAppearance(s.cornerDotTopRight),
-                cornerDotBottomLeft = applyAppearance(s.cornerDotBottomLeft),
-                cornerDotBottomRight = applyAppearance(s.cornerDotBottomRight),
+                cornerZoneTopLeft = applyAppearance(s.cornerZoneTopLeft),
+                cornerZoneTopRight = applyAppearance(s.cornerZoneTopRight),
+                cornerZoneBottomLeft = applyAppearance(s.cornerZoneBottomLeft),
+                cornerZoneBottomRight = applyAppearance(s.cornerZoneBottomRight),
             )
         }
     }

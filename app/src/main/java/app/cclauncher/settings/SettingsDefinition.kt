@@ -437,6 +437,15 @@ data class AppSettings(
     val showPageIndicator: Boolean = true,
 
     @Setting(
+        title = "Show Grid Overlay in Move Mode",
+        description = "Show a grid of cells while moving an app, widget, or folder so you can see exactly where each grid slot begins and ends.",
+        category = Layout::class,
+        type = Toggle::class,
+        key = "SHOW_MOVE_GRID_OVERLAY",
+    )
+    val showMoveGridOverlay: Boolean = false,
+
+    @Setting(
         title = "Show App Icons on Home Screen",
         description = "Display app icons on the home screen",
         category = Appearance::class,
@@ -575,29 +584,29 @@ data class AppSettings(
     @Persisted(key = "SWIPE_RIGHT_FOLDER_ID")
     val swipeRightFolderId: String = "",
 
-    @Persisted(key = "CORNER_DOT_TOP_LEFT_JSON")
+    @Persisted(key = "CORNER_ZONE_TOP_LEFT_JSON")
     @Serialized
-    val cornerDotTopLeft: CornerDotConfig = CornerDotConfig(),
+    val cornerZoneTopLeft: CornerZoneConfig = CornerZoneConfig(),
 
-    @Persisted(key = "CORNER_DOT_TOP_RIGHT_JSON")
+    @Persisted(key = "CORNER_ZONE_TOP_RIGHT_JSON")
     @Serialized
-    val cornerDotTopRight: CornerDotConfig = CornerDotConfig(),
+    val cornerZoneTopRight: CornerZoneConfig = CornerZoneConfig(),
 
-    @Persisted(key = "CORNER_DOT_BOTTOM_LEFT_JSON")
+    @Persisted(key = "CORNER_ZONE_BOTTOM_LEFT_JSON")
     @Serialized
-    val cornerDotBottomLeft: CornerDotConfig = CornerDotConfig(),
+    val cornerZoneBottomLeft: CornerZoneConfig = CornerZoneConfig(),
 
-    @Persisted(key = "CORNER_DOT_BOTTOM_RIGHT_JSON")
+    @Persisted(key = "CORNER_ZONE_BOTTOM_RIGHT_JSON")
     @Serialized
-    val cornerDotBottomRight: CornerDotConfig = CornerDotConfig(),
+    val cornerZoneBottomRight: CornerZoneConfig = CornerZoneConfig(),
 
-    @Persisted(key = "APPLY_TO_ALL_CORNER_DOTS")
-    val applyToAllCornerDots: Boolean = false,
+    @Persisted(key = "APPLY_TO_ALL_CORNER_ZONES")
+    val applyToAllCornerZones: Boolean = false,
 
-    /** Shared appearance profile used when applyToAllCornerDots == true. */
-    @Persisted(key = "CORNER_DOT_UNIVERSAL_JSON")
+    /** Shared appearance profile used when applyToAllCornerZones == true. */
+    @Persisted(key = "CORNER_ZONE_UNIVERSAL_JSON")
     @Serialized
-    val cornerDotUniversal: CornerDotConfig = CornerDotConfig(),
+    val cornerZoneUniversal: CornerZoneConfig = CornerZoneConfig(),
 
     @Setting(
         title = "Show Folder Icon",

@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetManager
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -28,8 +29,12 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -52,7 +57,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
-import app.cclauncher.settings.CornerDotConfig
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import app.cclauncher.settings.CornerZoneConfig
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
@@ -323,7 +334,8 @@ fun HomeScreen(
                     },
                     onLabelAlignmentChange = { alignment ->
                         viewModel.updateHomeAppLabelAlignment(it, alignment)
-                    }
+                    },
+                    onNavigateToSettings = onNavigateToSettings,
                 )
             }
         }
@@ -356,7 +368,13 @@ fun HomeScreen(
                     onMoveToPage = { widget, targetPage ->
                         viewModel.moveItemToPage(widget, targetPage)
                         showWidgetContextMenu = null
-                    }
+                    },
+                    onNavigateToSettings = onNavigateToSettings,
+                    isBeingMoved = widgetBeingMoved?.id == it.id,
+                    onCancelMove = {
+                        widgetBeingMoved = null
+                        showWidgetContextMenu = null
+                    },
                 )
             }
         }
@@ -399,7 +417,8 @@ fun HomeScreen(
                     },
                     onLabelAlignmentChange = { alignment ->
                         viewModel.updateFolderTitleLabelAlignment(it.id, alignment)
-                    }
+                    },
+                    onNavigateToSettings = onNavigateToSettings,
                 )
             }
         }
@@ -469,10 +488,9 @@ fun HomeScreen(
             }
         }
 
-        // Corner shortcut dots — rendered on top of everything
-        HomeCornerDots(
+        // Corner shortcut zones — rendered on top of everything
+        HomeCornerZones(
             settings = settings,
-            allFolders = homeLayoutState.items.filterIsInstance<HomeItem.Folder>(),
             onOpenFolder = { folderId -> openFolderId = if (openFolderId == folderId) null else folderId },
             onAction = { action -> handleSwipeAction(action, {}) },
         )
@@ -526,6 +544,15 @@ private fun HomeScreenPage(
                     onDoubleTap = { onDoubleTap() },
                     onLongPress = { offset ->
                         if (isMoving) {
+                            // Widgets in move-mode get their context menu on long-press
+                            // instead of a silent cancel (apps/folders cancel via their own handlers)
+                            if (widgetBeingMoved != null) {
+                                val widget = findWidgetAtPosition(homeLayout, offset, size, page)
+                                if (widget != null && widget.id == widgetBeingMoved.id) {
+                                    onWidgetLongPress(widget)
+                                    return@detectTapGestures
+                                }
+                            }
                             onCancelMovement()
                             return@detectTapGestures
                         }
@@ -581,6 +608,30 @@ private fun HomeScreenPage(
             onFolderClick = onFolderClick,
             onFolderLongPress = onFolderLongPress,
         )
+
+        if (isMoving && settings.showMoveGridOverlay) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val hPadPx = 16.dp.toPx()
+                val vPadPx = 16.dp.toPx()
+                val usableW = size.width - hPadPx * 2
+                val usableH = size.height - vPadPx * 2
+                val cellW = usableW / homeLayout.columns
+                val cellH = usableH / homeLayout.rows
+                val lineColor = Color.White.copy(alpha = 0.25f)
+                val strokePx = 1.dp.toPx()
+
+                // vertical lines
+                for (col in 0..homeLayout.columns) {
+                    val x = hPadPx + col * cellW
+                    drawLine(lineColor, Offset(x, vPadPx), Offset(x, vPadPx + usableH), strokePx)
+                }
+                // horizontal lines
+                for (row in 0..homeLayout.rows) {
+                    val y = vPadPx + row * cellH
+                    drawLine(lineColor, Offset(hPadPx, y), Offset(hPadPx + usableW, y), strokePx)
+                }
+            }
+        }
     }
 }
 
@@ -775,7 +826,10 @@ fun WidgetContextMenu(
     onResize: (HomeItem.Widget) -> Unit,
     onConfigure: (HomeItem.Widget) -> Unit,
     onMove: (HomeItem.Widget) -> Unit,
-    onMoveToPage: (HomeItem.Widget, Int) -> Unit
+    onMoveToPage: (HomeItem.Widget, Int) -> Unit,
+    onNavigateToSettings: () -> Unit = {},
+    isBeingMoved: Boolean = false,
+    onCancelMove: () -> Unit = {},
 ) {
     if (widgetItem == null) return
 
@@ -805,14 +859,35 @@ fun WidgetContextMenu(
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Widget Options") },
+            title = {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Text("Widget Options", modifier = Modifier.align(Alignment.CenterStart))
+                    IconButton(
+                        onClick = { onNavigateToSettings(); onDismiss() },
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
             text = {
                 Column {
-                    DropdownMenuItem(
-                        text = { Text("Move") },
-                        onClick = { onMove(widgetItem); onDismiss() }
-                    )
-                    if (pageCount > 1 || pageCount < MAX_PAGES) {
+                    if (isBeingMoved) {
+                        DropdownMenuItem(
+                            text = { Text("Cancel Move") },
+                            onClick = { onCancelMove(); onDismiss() }
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Move") },
+                            onClick = { onMove(widgetItem); onDismiss() }
+                        )
+                    }
+                    if (!isBeingMoved && (pageCount > 1 || pageCount < MAX_PAGES)) {
                         DropdownMenuItem(
                             text = { Text("Move to page...") },
                             onClick = { showPageSelector = true }
@@ -854,6 +929,7 @@ fun HomeAppContextMenu(
     onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
@@ -939,7 +1015,21 @@ fun HomeAppContextMenu(
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("App Options") },
+            title = {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Text("App Options", modifier = Modifier.align(Alignment.CenterStart))
+                    IconButton(
+                        onClick = { onNavigateToSettings(); onDismiss() },
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
             text = {
                 Column {
                     DropdownMenuItem(
@@ -1093,66 +1183,148 @@ private fun calculateGridPosition(
 }
 
 /**
- * Renders the 4 corner shortcut dots overlaid on the home screen.
- * Dots with [CornerDotConfig.visible] == false are rendered as transparent touch targets.
- * Dots with [CornerDotConfig.enabled] == false are skipped entirely.
+ * Renders the 4 corner shortcut zones overlaid on the home screen.
+ * Each zone is a right triangle anchored at its screen corner with a 45° hypotenuse.
+ * Zones with [CornerZoneConfig.visible] == false are transparent but still receive touches.
+ * Zones with [CornerZoneConfig.enabled] == false are skipped entirely.
  */
 @Composable
-private fun HomeCornerDots(
+private fun HomeCornerZones(
     settings: AppSettings,
-    allFolders: List<HomeItem.Folder>,
     onOpenFolder: (String) -> Unit,
     onAction: (Int) -> Unit,
 ) {
-    val corners = listOf(
-        Alignment.TopStart to settings.cornerDotTopLeft,
-        Alignment.TopEnd to settings.cornerDotTopRight,
-        Alignment.BottomStart to settings.cornerDotBottomLeft,
-        Alignment.BottomEnd to settings.cornerDotBottomRight,
+    val zones = listOf(
+        settings.cornerZoneTopLeft,
+        settings.cornerZoneTopRight,
+        settings.cornerZoneBottomLeft,
+        settings.cornerZoneBottomRight,
+    )
+    val alignments = listOf(
+        Alignment.TopStart,
+        Alignment.TopEnd,
+        Alignment.BottomStart,
+        Alignment.BottomEnd,
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        corners.forEach { (alignment, rawConfig) ->
-            if (!rawConfig.enabled) return@forEach
-            // When "apply to all" is on, use the universal profile for appearance.
-            val config = if (settings.applyToAllCornerDots) {
-                val u = settings.cornerDotUniversal
+        zones.forEachIndexed { cornerPos, rawConfig ->
+            if (!rawConfig.enabled) return@forEachIndexed
+            val config = if (settings.applyToAllCornerZones) {
+                val u = settings.cornerZoneUniversal
                 rawConfig.copy(
                     size = u.size, color = u.color, opacity = u.opacity, visible = u.visible,
-                    borderEnabled = u.borderEnabled, borderColor = u.borderColor,
-                    borderWidth = u.borderWidth, inset = u.inset,
+                    borderEnabled = u.borderEnabled, borderColor = u.borderColor, borderWidth = u.borderWidth,
                 )
             } else rawConfig
 
-            val dotColor = if (config.visible) {
-                Color(config.color).copy(alpha = config.opacity)
-            } else {
-                Color.Transparent
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(alignment)
-                    .padding(config.inset.dp)
-                    .size(config.size.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-                    .then(
-                        if (config.borderEnabled && config.visible)
-                            Modifier.border(config.borderWidth.dp, Color(config.borderColor).copy(alpha = config.opacity), CircleShape)
-                        else Modifier
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) {
-                        when (config.action) {
-                            Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(config.folderId)
-                            else -> onAction(config.action)
+            CornerZoneElement(
+                config = config,
+                alignment = alignments[cornerPos],
+                cornerPos = cornerPos,
+                onTap = {
+                    when (config.action) {
+                        Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(config.folderId)
+                        else -> onAction(config.action)
+                    }
+                },
+                onHold = {
+                    if (config.holdEnabled) {
+                        when (config.holdAction) {
+                            Constants.SwipeAction.OPEN_FOLDER -> onOpenFolder(config.holdFolderId)
+                            else -> onAction(config.holdAction)
                         }
                     }
+                },
             )
         }
+    }
+}
+
+@Composable
+private fun BoxScope.CornerZoneElement(
+    config: CornerZoneConfig,
+    alignment: Alignment,
+    cornerPos: Int,
+    onTap: () -> Unit,
+    onHold: () -> Unit,
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 1.08f else 1.0f,
+        label = "zone_scale",
+    )
+    val opacityBoost by animateFloatAsState(
+        targetValue = if (isPressed) 0.25f else 0.0f,
+        label = "zone_brightness",
+    )
+
+    val effectiveOpacity = (config.opacity + opacityBoost).coerceIn(0f, 1f)
+    val fillColor = if (config.visible) Color(config.color).copy(alpha = effectiveOpacity) else Color.Transparent
+    val strokeColor = if (config.visible && config.borderEnabled) Color(config.borderColor).copy(alpha = effectiveOpacity) else Color.Transparent
+    val borderWidthDp = config.borderWidth.dp
+
+    val transformOrigin = when (cornerPos) {
+        Constants.CornerPosition.TOP_LEFT    -> TransformOrigin(0f, 0f)
+        Constants.CornerPosition.TOP_RIGHT   -> TransformOrigin(1f, 0f)
+        Constants.CornerPosition.BOTTOM_LEFT -> TransformOrigin(0f, 1f)
+        else                                 -> TransformOrigin(1f, 1f)
+    }
+
+    Box(
+        modifier = Modifier
+            .align(alignment)
+            .size(config.size.dp)
+            .graphicsLayer(scaleX = scale, scaleY = scale, transformOrigin = transformOrigin)
+            .pointerInput(config.action, config.holdEnabled, config.holdAction) {
+                detectTapGestures(
+                    onPress = { offset ->
+                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) {
+                            isPressed = true
+                            tryAwaitRelease()
+                            isPressed = false
+                        }
+                    },
+                    onTap = { offset ->
+                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) onTap()
+                    },
+                    onLongPress = { offset ->
+                        if (isInsideZoneTriangle(offset, size.width.toFloat(), cornerPos)) {
+                            isPressed = false
+                            onHold()
+                        }
+                    },
+                )
+            }
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val path = buildZoneTrianglePath(size.width, cornerPos)
+            drawPath(path, color = fillColor)
+            if (config.borderEnabled && config.visible) {
+                drawPath(path, color = strokeColor, style = Stroke(width = borderWidthDp.toPx()))
+            }
+        }
+    }
+}
+
+private fun buildZoneTrianglePath(size: Float, cornerPos: Int): Path = Path().apply {
+    when (cornerPos) {
+        Constants.CornerPosition.TOP_LEFT    -> { moveTo(0f, 0f);    lineTo(size, 0f);  lineTo(0f, size)  }
+        Constants.CornerPosition.TOP_RIGHT   -> { moveTo(size, 0f);  lineTo(0f, 0f);   lineTo(size, size) }
+        Constants.CornerPosition.BOTTOM_LEFT -> { moveTo(0f, size);  lineTo(0f, 0f);   lineTo(size, size) }
+        else                                 -> { moveTo(size, size); lineTo(size, 0f); lineTo(0f, size)  }
+    }
+    close()
+}
+
+private fun isInsideZoneTriangle(offset: Offset, size: Float, cornerPos: Int): Boolean {
+    val x = offset.x; val y = offset.y
+    if (x < 0f || y < 0f || x > size || y > size) return false
+    return when (cornerPos) {
+        Constants.CornerPosition.TOP_LEFT    -> x + y <= size
+        Constants.CornerPosition.TOP_RIGHT   -> (size - x) + y <= size
+        Constants.CornerPosition.BOTTOM_LEFT -> x + (size - y) <= size
+        else                                 -> (size - x) + (size - y) <= size
     }
 }
 
@@ -1169,6 +1341,7 @@ fun FolderContextMenu(
     onRename: (HomeItem.Folder, String) -> Unit,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -1270,7 +1443,21 @@ fun FolderContextMenu(
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("Folder Options") },
+            title = {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Text("Folder Options", modifier = Modifier.align(Alignment.CenterStart))
+                    IconButton(
+                        onClick = { onNavigateToSettings(); onDismiss() },
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
             text = {
                 Column {
                     DropdownMenuItem(text = { Text("Move") }, onClick = { onMove(folderItem); onDismiss() })

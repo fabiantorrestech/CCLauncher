@@ -1,6 +1,7 @@
 package app.cclauncher.ui.composables
 
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -348,6 +349,28 @@ private fun FolderGridContent(
                     folderTextColor = folder.titleTextColor,
                     modifier = itemMod,
                 )
+            }
+        }
+
+        if (movingApp != null && settings.showMoveGridOverlay) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val hPadPx = horizontalPadding.toPx()
+                val vPadPx = verticalPadding.toPx()
+                val usableW = size.width - hPadPx * 2
+                val usableH = size.height - vPadPx * 2
+                val cellW = usableW / folder.gridColumns
+                val cellH = usableH / folder.gridRows
+                val lineColor = Color.White.copy(alpha = 0.25f)
+                val strokePx = 1.dp.toPx()
+
+                for (col in 0..folder.gridColumns) {
+                    val x = hPadPx + col * cellW
+                    drawLine(lineColor, Offset(x, vPadPx), Offset(x, vPadPx + usableH), strokePx)
+                }
+                for (row in 0..folder.gridRows) {
+                    val y = vPadPx + row * cellH
+                    drawLine(lineColor, Offset(hPadPx, y), Offset(hPadPx + usableW, y), strokePx)
+                }
             }
         }
     }

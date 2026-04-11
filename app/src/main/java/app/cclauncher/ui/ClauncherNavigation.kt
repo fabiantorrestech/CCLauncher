@@ -42,7 +42,7 @@ import app.cclauncher.helper.showToast
 import app.cclauncher.ui.components.snackbar.LauncherSnackbarHost
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.screens.AppDrawerScreen
-import app.cclauncher.ui.screens.CornerDotSettingsScreen
+import app.cclauncher.ui.screens.CornerZoneSettingsScreen
 import app.cclauncher.ui.screens.FolderDetailScreen
 import app.cclauncher.ui.screens.FolderListScreen
 import app.cclauncher.ui.screens.HiddenAppsScreen
@@ -270,7 +270,7 @@ fun CLauncherNavigation(
                         pushOnTop(LauncherDestination.HiddenApps)
                     },
                     onNavigateToFolderList = { pushOnTop(LauncherDestination.FolderList) },
-                    onNavigateToCornerDotSettings = { pushOnTop(LauncherDestination.CornerDotSettings) },
+                    onNavigateToCornerDotSettings = { pushOnTop(LauncherDestination.CornerZoneSettings) },
                 )
             }
 
@@ -334,11 +334,11 @@ fun CLauncherNavigation(
                 )
             }
 
-            entry<LauncherDestination.CornerDotSettings>(metadata = settingsTransitions) {
-                CornerDotSettingsScreen(
+            entry<LauncherDestination.CornerZoneSettings>(metadata = settingsTransitions) {
+                CornerZoneSettingsScreen(
                     mainViewModel = viewModel,
                     onNavigateBack = {
-                        if (backStack.lastOrNull() == LauncherDestination.CornerDotSettings) {
+                        if (backStack.lastOrNull() == LauncherDestination.CornerZoneSettings) {
                             backStack.removeAt(backStack.lastIndex)
                         } else {
                             navigateTo(LauncherDestination.Settings)
@@ -430,5 +430,5 @@ sealed interface LauncherDestination : NavKey {
     data object FolderDetail : LauncherDestination
 
     @Serializable
-    data object CornerDotSettings : LauncherDestination
+    data object CornerZoneSettings : LauncherDestination
 }

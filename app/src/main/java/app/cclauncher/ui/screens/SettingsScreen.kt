@@ -944,11 +944,11 @@ fun SettingsScreen(
                                                 }
                                             }
                                         }
-                                        // Corner dots section at the end of Gestures tab
+                                        // Corner zones section at the end of Gestures tab
                                         if (tab.category == app.cclauncher.settings.Gestures::class) {
                                             SettingsAction(
-                                                title = "Configure Corner Dots",
-                                                description = "Set up tappable shortcut dots in the home screen corners",
+                                                title = "Configure Corner Zones",
+                                                description = "Set up tap & hold shortcut zones in the home screen corners",
                                                 onClick = onNavigateToCornerDotSettings,
                                             )
                                         }
