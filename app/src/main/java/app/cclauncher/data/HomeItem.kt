@@ -55,6 +55,12 @@ sealed class HomeItem {
         val titleLabelAlignment: Int = -1,
         /** When false the folder tile is hidden from the home grid but can still be opened via gestures/dots. */
         val showOnHome: Boolean = true,
+        /** Hide the folder name text in the overlay header. */
+        val hideTitle: Boolean = false,
+        /** Hide the close (X) button in the overlay header. */
+        val hideCloseButton: Boolean = false,
+        /** Hide the rounded-rectangle border around the folder overlay. */
+        val hideOutline: Boolean = false,
         override val id: String = "folder_${UUID.randomUUID()}",
         override val page: Int = 0,
         override val row: Int,

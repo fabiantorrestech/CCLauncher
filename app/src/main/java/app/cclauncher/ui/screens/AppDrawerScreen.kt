@@ -439,7 +439,8 @@ fun AppDrawerScreen(
                         ) {
                         // Reserve space on the scrollbar side so content doesn't sit
                         // flush against the scrollbar thumb / touch target.
-                        val scrollbarPadding = if (showScrollbar) {
+                        // Only apply when there are apps to show — no apps means no scrollbar.
+                        val scrollbarPadding = if (showScrollbar && displayList.isNotEmpty()) {
                             if (scrollbarOnLeft) Modifier.padding(start = 12.dp)
                             else Modifier.padding(end = 12.dp)
                         } else Modifier

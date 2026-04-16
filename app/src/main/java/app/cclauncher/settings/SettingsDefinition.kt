@@ -501,10 +501,19 @@ data class AppSettings(
     val doubleTapToLock: Boolean = false,
 
     @Setting(
+        title = "Swipe Gestures in Folders",
+        description = "Allow swipe up/down/left/right actions while a folder is open",
+        category = Gestures::class,
+        type = Toggle::class,
+        key = "SWIPE_GESTURES_IN_FOLDERS",
+    )
+    val swipeGesturesInFolders: Boolean = false,
+
+    @Setting(
         title = "Swipe Down Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
         key = "SWIPE_DOWN_ACTION",
     )
     val swipeDownAction: Int = Constants.SwipeAction.NOTIFICATIONS,
@@ -525,7 +534,7 @@ data class AppSettings(
         title = "Swipe Up Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
         key = "SWIPE_UP_ACTION",
     )
     val swipeUpAction: Int = Constants.SwipeAction.SEARCH,
@@ -546,7 +555,7 @@ data class AppSettings(
         title = "Swipe Left Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
         key = "SWIPE_LEFT_ACTION",
     )
     val swipeLeftAction: Int = Constants.SwipeAction.NULL,
@@ -567,7 +576,7 @@ data class AppSettings(
         title = "Swipe Right Action",
         category = Gestures::class,
         type = Dropdown::class,
-        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder"],
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
         key = "SWIPE_RIGHT_ACTION",
     )
     val swipeRightAction: Int = Constants.SwipeAction.NULL,
@@ -607,6 +616,14 @@ data class AppSettings(
     @Persisted(key = "CORNER_ZONE_UNIVERSAL_JSON")
     @Serialized
     val cornerZoneUniversal: CornerZoneConfig = CornerZoneConfig(),
+
+    /** Whether corner zones remain active while a folder overlay is open. */
+    @Persisted(key = "CORNER_ZONES_IN_FOLDERS")
+    val cornerZonesInFolders: Boolean = true,
+
+    /** Show the danger-edge gradient fade on corner zones. */
+    @Persisted(key = "CORNER_ZONE_DANGER_FADE")
+    val cornerZoneDangerFade: Boolean = true,
 
     @Setting(
         title = "Show Folder Icon",

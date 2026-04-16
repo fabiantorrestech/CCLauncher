@@ -11,19 +11,31 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import app.cclauncher.helper.iconpack.IconPackManager
 import app.cclauncher.ui.viewmodels.SettingsViewModel
 
@@ -511,4 +523,191 @@ fun Color.luminance(): Float {
     val green = green * 0.587f
     val blue = blue * 0.114f
     return red + green + blue
+}
+
+/**
+ * App-wide Slider wrapper with a thicker track (8 dp) to match Material You conventions.
+ * Replaces the default thin 4 dp track used by Material3's stock Slider.
+ *
+ * Includes a compact value display with a pencil icon that opens an inline text field for
+ * precise numeric entry. The entered value is clamped to [valueRange] on commit.
+ *
+ * @param valueFormat controls how the current value is shown. Defaults to integer display
+ *   when the value is whole, otherwise two decimal places.
+ */
+@Composable
+fun AppSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    valueFormat: (Float) -> String = { v ->
+        if (v == kotlin.math.floor(v) && v >= Int.MIN_VALUE && v <= Int.MAX_VALUE)
+            v.toInt().toString()
+        else "%.2f".format(v)
+    },
+) {
+    var isEditing by remember { mutableStateOf(false) }
+    var textValue by remember(value, isEditing) {
+        mutableStateOf(
+            TextFieldValue(
+                text = valueFormat(value),
+                selection = TextRange(0, valueFormat(value).length),
+            )
+        )
+    }
+    val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    // Tracks whether the text field has received focus at least once.
+    // Prevents onFocusChanged(isFocused=false) during initial composition from
+    // immediately dismissing the field before LaunchedEffect can request focus.
+    var hasHadFocus by remember { mutableStateOf(false) }
+
+    fun commit() {
+        val parsed = textValue.text.trim().toFloatOrNull()
+        if (parsed != null) {
+            onValueChange(parsed.coerceIn(valueRange))
+            onValueChangeFinished?.invoke()
+        }
+        isEditing = false
+        hasHadFocus = false
+    }
+
+    Column(modifier = modifier) {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+            valueRange = valueRange,
+            steps = steps,
+            onValueChangeFinished = onValueChangeFinished,
+            track = { state ->
+                SliderDefaults.Track(
+                    sliderState = state,
+                    modifier = Modifier.height(8.dp),
+                )
+            },
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isEditing) {
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { textValue = it },
+                    modifier = Modifier
+                        .width(120.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                hasHadFocus = true
+                            } else if (hasHadFocus) {
+                                commit()
+                            }
+                        },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = {
+                        focusManager.clearFocus()
+                        commit()
+                    }),
+                )
+                LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            } else {
+                Text(
+                    text = valueFormat(value),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                IconButton(
+                    onClick = { isEditing = true },
+                    enabled = enabled,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Edit,
+                        contentDescription = "Enter value manually",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ─── PREVIEWS (debug-only, stripped from release) ────────────────────────────
+
+@Preview(showBackground = true, name = "SettingsSection")
+@Composable
+private fun PreviewSettingsSection() {
+    MaterialTheme {
+        SettingsSection(title = "Appearance") {
+            SettingsItem(title = "Theme", subtitle = "Dark", onClick = {})
+            SettingsToggle(title = "Bold text", isChecked = true, onCheckedChange = {})
+            SettingsAction(title = "Reset defaults", onClick = {})
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "SettingsItem")
+@Composable
+private fun PreviewSettingsItem() {
+    MaterialTheme {
+        SettingsItem(
+            title = "App font",
+            subtitle = "System default",
+            description = "Changes the font used across the launcher",
+            onClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "SettingsToggle - on")
+@Composable
+private fun PreviewSettingsToggleOn() {
+    MaterialTheme {
+        SettingsToggle(
+            title = "Show clock",
+            description = "Displays a clock on the home screen",
+            isChecked = true,
+            onCheckedChange = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "SettingsToggle - off")
+@Composable
+private fun PreviewSettingsToggleOff() {
+    MaterialTheme {
+        SettingsToggle(
+            title = "Show clock",
+            description = "Displays a clock on the home screen",
+            isChecked = false,
+            onCheckedChange = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "SettingsAction")
+@Composable
+private fun PreviewSettingsAction() {
+    MaterialTheme {
+        SettingsAction(
+            title = "Wallpaper",
+            description = "Pick a wallpaper from your gallery",
+            buttonText = "Set",
+            onClick = {}
+        )
+    }
 }

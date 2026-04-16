@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import app.cclauncher.data.HomeItem
 import app.cclauncher.helper.showToast
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.BackHandler
+import app.cclauncher.ui.components.AppSlider
 
 @Composable
 fun FolderOverlay(
@@ -78,13 +80,20 @@ fun FolderOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = settings.folderBackgroundOpacity))
+            // Consume drag events so swipe gestures on the backdrop don't leak through
+            // to the home screen gesture handler underneath.
+            .pointerInput(Unit) { detectDragGestures(onDrag = { change, _ -> change.consume() }) }
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
                 .clip(RoundedCornerShape(16.dp))
-                .border(1.dp, Color.LightGray, RoundedCornerShape(16.dp)),
+                .then(
+                    if (!folder.hideOutline)
+                        Modifier.border(1.dp, Color.LightGray, RoundedCornerShape(16.dp))
+                    else Modifier
+                ),
             color = Color.Transparent,
         ) {
             Column(
@@ -92,35 +101,41 @@ fun FolderOverlay(
                     .fillMaxSize()
                     .padding(12.dp),
             ) {
-                // Folder title + close button
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = folder.title,
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
-                        color = when {
-                            folder.titleTextColor != 0 -> Color(folder.titleTextColor)
-                            settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
-                        textAlign = TextAlign.Center,
+                // Folder title + close button — hidden individually if toggled off
+                if (!folder.hideTitle || !folder.hideCloseButton) {
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 40.dp),
-                    )
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.CenterEnd),
+                            .padding(bottom = 8.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close folder",
-                            tint = Color.White,
-                        )
+                        if (!folder.hideTitle) {
+                            Text(
+                                text = folder.title,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                                color = when {
+                                    folder.titleTextColor != 0 -> Color(folder.titleTextColor)
+                                    settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
+                                    else -> MaterialTheme.colorScheme.onSurface
+                                },
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = if (!folder.hideCloseButton) 40.dp else 0.dp),
+                            )
+                        }
+                        if (!folder.hideCloseButton) {
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.align(Alignment.CenterEnd),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close folder",
+                                    tint = Color.White,
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -226,7 +241,7 @@ fun FolderOverlay(
                     Column {
                         Text("Width (columns): $colSpan")
                         if (maxColSpan > 1) {
-                            Slider(
+                            AppSlider(
                                 value = colSpan.toFloat(),
                                 onValueChange = { colSpan = it.roundToInt().coerceIn(1, maxColSpan) },
                                 valueRange = 1f..maxColSpan.toFloat(),
@@ -235,7 +250,7 @@ fun FolderOverlay(
                         }
                         Text("Height (rows): $rowSpan")
                         if (maxRowSpan > 1) {
-                            Slider(
+                            AppSlider(
                                 value = rowSpan.toFloat(),
                                 onValueChange = { rowSpan = it.roundToInt().coerceIn(1, maxRowSpan) },
                                 valueRange = 1f..maxRowSpan.toFloat(),
@@ -267,7 +282,7 @@ fun FolderOverlay(
                 text = {
                     Column {
                         Text("Size: ${"%.2f".format(textSize)}")
-                        Slider(
+                        AppSlider(
                             value = textSize,
                             onValueChange = { textSize = it },
                             valueRange = 0.5f..2.0f,

@@ -215,6 +215,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         element<Int>("titleTextColor")
         element<Int>("titleLabelAlignment")
         element<Boolean>("showOnHome")
+        element<Boolean>("hideTitle")
+        element<Boolean>("hideCloseButton")
+        element<Boolean>("hideOutline")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.Folder) {
@@ -234,6 +237,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             encodeIntElement(descriptor, 12, value.titleTextColor)
             encodeIntElement(descriptor, 13, value.titleLabelAlignment)
             encodeBooleanElement(descriptor, 14, value.showOnHome)
+            encodeBooleanElement(descriptor, 15, value.hideTitle)
+            encodeBooleanElement(descriptor, 16, value.hideCloseButton)
+            encodeBooleanElement(descriptor, 17, value.hideOutline)
         }
     }
 
@@ -253,6 +259,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         var titleTextColor = 0
         var titleLabelAlignment = -1
         var showOnHome = true
+        var hideTitle = false
+        var hideCloseButton = false
+        var hideOutline = false
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -272,6 +281,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
                     12 -> titleTextColor = decodeIntElement(descriptor, index)
                     13 -> titleLabelAlignment = decodeIntElement(descriptor, index)
                     14 -> showOnHome = decodeBooleanElement(descriptor, index)
+                    15 -> hideTitle = decodeBooleanElement(descriptor, index)
+                    16 -> hideCloseButton = decodeBooleanElement(descriptor, index)
+                    17 -> hideOutline = decodeBooleanElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> { /* skip unknown fields for forward compat */ }
                 }
@@ -294,6 +306,9 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             titleTextColor = titleTextColor,
             titleLabelAlignment = titleLabelAlignment,
             showOnHome = showOnHome,
+            hideTitle = hideTitle,
+            hideCloseButton = hideCloseButton,
+            hideOutline = hideOutline,
         )
     }
 }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -60,10 +61,15 @@ import androidx.compose.ui.graphics.Color
 import android.graphics.Rect as AndroidRect
 import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -98,6 +104,7 @@ import app.cclauncher.helper.getScreenDimensions
 import app.cclauncher.helper.showToast
 import app.cclauncher.helper.withResolvedUser
 import app.cclauncher.settings.AppSettings
+import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.composables.HomeAppItem
 import app.cclauncher.ui.composables.WidgetHostViewContainer
 import app.cclauncher.ui.composables.WidgetSizeData
@@ -162,21 +169,9 @@ fun HomeScreen(
             Constants.SwipeAction.NEXT_PAGE -> goToNextPage()
             Constants.SwipeAction.PREVIOUS_PAGE -> goToPreviousPage()
             Constants.SwipeAction.OPEN_FOLDER -> viewModel.openFolderById(folderId)
+            Constants.SwipeAction.OPEN_SETTINGS -> onNavigateToSettings()
             Constants.SwipeAction.NULL -> {}
         }
-    }
-
-    val onSwipeUp: () -> Unit = {
-        handleSwipeAction(settings.swipeUpAction, { viewModel.launchSwipeUpApp() }, settings.swipeUpFolderId)
-    }
-    val onSwipeDown: () -> Unit = {
-        handleSwipeAction(settings.swipeDownAction, { viewModel.launchSwipeDownApp() }, settings.swipeDownFolderId)
-    }
-    val onSwipeLeft: () -> Unit = {
-        handleSwipeAction(settings.swipeLeftAction, { viewModel.launchSwipeLeftApp() }, settings.swipeLeftFolderId)
-    }
-    val onSwipeRight: () -> Unit = {
-        handleSwipeAction(settings.swipeRightAction, { viewModel.launchSwipeRightApp() }, settings.swipeRightFolderId)
     }
 
     var showAppContextMenu by remember { mutableStateOf<HomeItem.App?>(null) }
@@ -184,6 +179,23 @@ fun HomeScreen(
     var showFolderContextMenu by remember { mutableStateOf<HomeItem.Folder?>(null) }
     var resizeDialogItem by remember { mutableStateOf<HomeItem?>(null) }
     var openFolderId by remember { mutableStateOf<String?>(null) }
+
+    val onSwipeUp: () -> Unit = {
+        if (openFolderId == null || settings.swipeGesturesInFolders)
+            handleSwipeAction(settings.swipeUpAction, { viewModel.launchSwipeUpApp() }, settings.swipeUpFolderId)
+    }
+    val onSwipeDown: () -> Unit = {
+        if (openFolderId == null || settings.swipeGesturesInFolders)
+            handleSwipeAction(settings.swipeDownAction, { viewModel.launchSwipeDownApp() }, settings.swipeDownFolderId)
+    }
+    val onSwipeLeft: () -> Unit = {
+        if (openFolderId == null || settings.swipeGesturesInFolders)
+            handleSwipeAction(settings.swipeLeftAction, { viewModel.launchSwipeLeftApp() }, settings.swipeLeftFolderId)
+    }
+    val onSwipeRight: () -> Unit = {
+        if (openFolderId == null || settings.swipeGesturesInFolders)
+            handleSwipeAction(settings.swipeRightAction, { viewModel.launchSwipeRightApp() }, settings.swipeRightFolderId)
+    }
 
     // Simple movement tracking - no overlay needed
     var widgetBeingMoved by remember { mutableStateOf<HomeItem.Widget?>(null) }
@@ -499,12 +511,14 @@ fun HomeScreen(
             }
         }
 
-        // Corner shortcut zones — rendered on top of everything
-        HomeCornerZones(
-            settings = settings,
-            onOpenFolder = { folderId -> openFolderId = if (openFolderId == folderId) null else folderId },
-            onAction = { action -> handleSwipeAction(action, {}) },
-        )
+        // Corner shortcut zones — hidden while a folder is open if the setting is off
+        if (openFolderId == null || settings.cornerZonesInFolders) {
+            HomeCornerZones(
+                settings = settings,
+                onOpenFolder = { folderId -> openFolderId = if (openFolderId == folderId) null else folderId },
+                onAction = { action -> handleSwipeAction(action, {}) },
+            )
+        }
     }
 }
 
@@ -966,7 +980,7 @@ fun HomeAppContextMenu(
             text = {
                 Column {
                     Text("Size: ${"%.2f".format(textSize)}")
-                    Slider(
+                    AppSlider(
                         value = textSize,
                         onValueChange = { textSize = it },
                         valueRange = 0.5f..2.0f,
@@ -1198,6 +1212,11 @@ private fun calculateGridPosition(
  *  differentiates an intentional zone swipe from the system's quick-flick home gesture. */
 private const val BOTTOM_ZONE_SWIPE_UP_DWELL_MS = 120L
 
+/** Dwell time (ms) required before a swipe-down is recognised on top corner zones.
+ *  Top zones sit adjacent to the status bar / notification-shade pull area; the dwell
+ *  reduces (but cannot eliminate) races with the system shade gesture. */
+private const val TOP_ZONE_SWIPE_DOWN_DWELL_MS = 120L
+
 /**
  * Renders the 4 corner shortcut zones overlaid on the home screen.
  * Each zone is a right triangle anchored at its screen corner with a 45° hypotenuse.
@@ -1264,6 +1283,7 @@ private fun HomeCornerZones(
                 config = config,
                 alignment = alignments[cornerPos],
                 cornerPos = cornerPos,
+                showDangerFade = settings.cornerZoneDangerFade,
                 onBoundsChanged = { rect ->
                     if (rect != null) exclusionRects[cornerPos] = rect
                     else exclusionRects.remove(cornerPos)
@@ -1315,6 +1335,7 @@ private fun BoxScope.CornerZoneElement(
     config: CornerZoneConfig,
     alignment: Alignment,
     cornerPos: Int,
+    showDangerFade: Boolean = true,
     onBoundsChanged: (AndroidRect?) -> Unit,
     onTap: () -> Unit,
     onHold: () -> Unit,
@@ -1345,6 +1366,39 @@ private fun BoxScope.CornerZoneElement(
     val validDirs = remember(cornerPos) { Constants.validSwipeDirs(cornerPos) }
     val isBottomZone = cornerPos == Constants.CornerPosition.BOTTOM_LEFT ||
                        cornerPos == Constants.CornerPosition.BOTTOM_RIGHT
+    val isTopZone = cornerPos == Constants.CornerPosition.TOP_LEFT ||
+                    cornerPos == Constants.CornerPosition.TOP_RIGHT
+
+    // Triangle clip shape — restricts BOTH rendering and hit-testing to just the triangle.
+    // In Compose 1.7+, Modifier.clip() with a non-rectangular shape also restricts pointer
+    // hit-testing, so touches in the rectangular bounding box that are OUTSIDE the triangle
+    // fall through to the underlying composables (home screen swipe gestures) instead of
+    // being absorbed by this Box.
+    val triangleShape = remember(cornerPos) {
+        GenericShape { size, _ ->
+            when (cornerPos) {
+                Constants.CornerPosition.TOP_LEFT    -> { moveTo(0f, 0f);         lineTo(size.width, 0f); lineTo(0f, size.height) }
+                Constants.CornerPosition.TOP_RIGHT   -> { moveTo(size.width, 0f); lineTo(0f, 0f);         lineTo(size.width, size.height) }
+                Constants.CornerPosition.BOTTOM_LEFT -> { moveTo(0f, size.height); lineTo(0f, 0f);        lineTo(size.width, size.height) }
+                else                                  -> { moveTo(size.width, size.height); lineTo(size.width, 0f); lineTo(0f, size.height) }
+            }
+            close()
+        }
+    }
+
+    // Danger-strip heights: how many px from the screen edge to treat as the collision zone.
+    // Navigation bar inset covers gesture nav area at the bottom; status bar inset covers the
+    // notification-shade pull area at the top. Both are coerced to sensible minimums so the
+    // indicator still shows when the insets are reported as 0 (gesture nav / hidden status bar).
+    val density = LocalDensity.current
+    val navDangerPx = with(density) {
+        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            .coerceAtLeast(48.dp).toPx()
+    }
+    val statusDangerPx = with(density) {
+        WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            .coerceAtLeast(24.dp).toPx()
+    }
 
     // Remove this zone's exclusion rect when it leaves composition
     DisposableEffect(Unit) {
@@ -1363,14 +1417,25 @@ private fun BoxScope.CornerZoneElement(
                     AndroidRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
                 )
             }
+            // Clip to the triangle — in Compose 1.7+ this also restricts hit-testing so
+            // the rectangular "dead zone" outside the triangle no longer blocks gestures.
+            .clip(triangleShape)
             .pointerInput(
                 config.action, config.holdEnabled, config.holdAction,
                 config.swipeLeft, config.swipeRight, config.swipeUp, config.swipeDown,
                 config.holdDurationMs, config.swipeDwellMs,
             ) {
-                awaitEachGesture {
+                awaitPointerEventScope {
+                  while (true) {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    if (!isInsideZoneTriangle(down.position, size.width.toFloat(), cornerPos)) return@awaitEachGesture
+                    if (!isInsideZoneTriangle(down.position, size.width.toFloat(), cornerPos)) {
+                        // Outside the triangle — release immediately so the home screen's sibling
+                        // gesture detectors (swipe up/down/left/right) receive this touch
+                        // unobstructed. Skipping awaitAllPointersUp is the key: awaitEachGesture
+                        // would call it, keeping this pointerInput scope "observing" at
+                        // PointerEventPass.Final for the entire gesture and blocking siblings.
+                        continue
+                    }
 
                     // Claim the down event so the home screen's swipe handler ignores it
                     down.consume()
@@ -1415,10 +1480,13 @@ private fun BoxScope.CornerZoneElement(
                             // Compute the required dwell for this direction.
                             // Bottom-zone swipe-up is always clamped to at least
                             // BOTTOM_ZONE_SWIPE_UP_DWELL_MS to resist Android's home gesture.
-                            val requiredDwell = if (isBottomZone && dir == Constants.ZoneSwipeDir.UP)
-                                maxOf(BOTTOM_ZONE_SWIPE_UP_DWELL_MS, config.swipeDwellMs.toLong())
-                            else
-                                config.swipeDwellMs.toLong()
+                            val requiredDwell = when {
+                                isBottomZone && dir == Constants.ZoneSwipeDir.UP ->
+                                    maxOf(BOTTOM_ZONE_SWIPE_UP_DWELL_MS, config.swipeDwellMs.toLong())
+                                isTopZone && dir == Constants.ZoneSwipeDir.DOWN ->
+                                    maxOf(TOP_ZONE_SWIPE_DOWN_DWELL_MS, config.swipeDwellMs.toLong())
+                                else -> config.swipeDwellMs.toLong()
+                            }
                             if (dir != null && dir in validDirs && r.elapsedMs >= requiredDwell) {
                                 onSwipe(dir)
                             }
@@ -1430,7 +1498,8 @@ private fun BoxScope.CornerZoneElement(
                     while (currentEvent.changes.any { it.pressed }) {
                         awaitPointerEvent().changes.forEach { it.consume() }
                     }
-                }
+                  } // end while(true)
+                } // end awaitPointerEventScope
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -1438,6 +1507,49 @@ private fun BoxScope.CornerZoneElement(
             drawPath(path, color = fillColor)
             if (config.borderEnabled && config.visible) {
                 drawPath(path, color = strokeColor, style = Stroke(width = borderWidthDp.toPx()))
+            }
+
+            // Danger-edge fade: linear gradient from the hypotenuse midpoint (dark, visible
+            // interior) to the outer screen corner (transparent, hidden by rounded bezel).
+            // The gradient direction ensures the ENTIRE hypotenuse is uniformly darkest, so
+            // the fade is visible along the diagonal AND along both screen-edge sides of the
+            // triangle. The drawing is clipped to the actual danger strip (nav-bar / status-bar
+            // height) so the indicator only covers the area that conflicts with system gestures.
+            // Purely cosmetic; actions still fire everywhere.
+            if (config.visible && showDangerFade) {
+                val fadeColor = Color.Black
+                val fadeAlpha = 0.22f
+                val hyp = Offset(size.width / 2, size.height / 2) // hypotenuse midpoint (start = dark)
+                val brush = when (cornerPos) {
+                    Constants.CornerPosition.BOTTOM_LEFT  -> Brush.linearGradient(
+                        colors = listOf(fadeColor.copy(alpha = fadeAlpha), Color.Transparent),
+                        start = hyp, end = Offset(0f, size.height),
+                    )
+                    Constants.CornerPosition.BOTTOM_RIGHT -> Brush.linearGradient(
+                        colors = listOf(fadeColor.copy(alpha = fadeAlpha), Color.Transparent),
+                        start = hyp, end = Offset(size.width, size.height),
+                    )
+                    Constants.CornerPosition.TOP_LEFT     -> Brush.linearGradient(
+                        colors = listOf(fadeColor.copy(alpha = fadeAlpha), Color.Transparent),
+                        start = hyp, end = Offset(0f, 0f),
+                    )
+                    else                                  -> Brush.linearGradient( // TOP_RIGHT
+                        colors = listOf(fadeColor.copy(alpha = fadeAlpha), Color.Transparent),
+                        start = hyp, end = Offset(size.width, 0f),
+                    )
+                }
+                // Clip to the danger strip (bottom N px for bottom zones, top N px for top zones)
+                if (isBottomZone) {
+                    val stripTop = (size.height - navDangerPx).coerceAtLeast(0f)
+                    clipRect(left = 0f, top = stripTop, right = size.width, bottom = size.height) {
+                        drawPath(path, brush = brush)
+                    }
+                } else {
+                    val stripBottom = statusDangerPx.coerceAtMost(size.height)
+                    clipRect(left = 0f, top = 0f, right = size.width, bottom = stripBottom) {
+                        drawPath(path, brush = brush)
+                    }
+                }
             }
         }
     }
@@ -1536,7 +1648,7 @@ fun FolderContextMenu(
             text = {
                 Column {
                     Text("Size: ${"%.2f".format(textSize)}")
-                    Slider(
+                    AppSlider(
                         value = textSize,
                         onValueChange = { textSize = it },
                         valueRange = 0.5f..2.0f,

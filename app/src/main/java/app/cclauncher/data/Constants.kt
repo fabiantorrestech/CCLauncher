@@ -50,6 +50,7 @@ object Constants {
         const val NEXT_PAGE = 4
         const val PREVIOUS_PAGE = 5
         const val OPEN_FOLDER = 6
+        const val OPEN_SETTINGS = 7
     }
 
     object CornerPosition {

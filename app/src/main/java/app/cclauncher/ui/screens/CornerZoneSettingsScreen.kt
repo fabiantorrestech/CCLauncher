@@ -29,6 +29,9 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -64,6 +67,7 @@ import app.cclauncher.data.HomeItem
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.settings.CornerZoneConfig
 import app.cclauncher.settings.ZoneSwipeConfig
+import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ColorPickerDialog
 import app.cclauncher.ui.viewmodels.SettingsViewModel
 import kotlinx.coroutines.delay
@@ -71,7 +75,7 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 private val CORNER_LABELS = listOf("Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right")
-private val ZONE_ACTION_LABELS = listOf("None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder")
+private val ZONE_ACTION_LABELS = listOf("None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings")
 
 private val SWIPE_DIR_LABELS = mapOf(
     Constants.ZoneSwipeDir.LEFT  to "Swipe Left",
@@ -142,7 +146,7 @@ fun CornerZoneSettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Home gesture warning — always shown so users are aware before configuring bottom zones
+            // Corner zone limitations banner — always shown
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -152,22 +156,35 @@ fun CornerZoneSettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            "⚠ Bottom Zone Limitation",
+                            "Corner Zone Limitations",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold,
                             fontStyle = FontStyle.Italic,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                         )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Swipe-up actions on Bottom-Left and Bottom-Right zones may conflict " +
-                            "with Android's system home gesture. Increase the Swipe Press Dwell " +
-                            "on those zones (120 ms+) to reduce interference, or leave swipe-up " +
-                            "unassigned on bottom corners.",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        Spacer(Modifier.height(6.dp))
+                        val bullets = listOf(
+                            "Bottom zones: swipe-up may conflict with Android's home gesture — cannot be fully prevented at the OS level. A fade near the bottom edge marks this area.",
+                            "Top zones: swipe-down may conflict with the notification shade — especially with the status bar visible. A fade near the top edge marks this area.",
+                            "These fades are visual only — actions still fire anywhere inside the zone.",
+                            "A minimum dwell is enforced on bottom swipe-up and top swipe-down to reduce (not eliminate) conflicts.",
                         )
+                        bullets.forEach { line ->
+                            Row(modifier = Modifier.padding(bottom = 4.dp)) {
+                                Text(
+                                    "• ",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                Text(
+                                    line,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(4.dp))
@@ -219,6 +236,62 @@ fun CornerZoneSettingsScreen(
                         onCheckedChange = {
                             coroutineScope.launch {
                                 settingsViewModel.updateSetting("applyToAllCornerZones", it)
+                            }
+                        }
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.height(4.dp))
+            }
+
+            // Corner zones in folders toggle
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Active Inside Folders", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Keep corner zones active when a folder is open",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = settings.cornerZonesInFolders,
+                        onCheckedChange = {
+                            coroutineScope.launch {
+                                settingsViewModel.updateSetting("cornerZonesInFolders", it)
+                            }
+                        }
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                Spacer(Modifier.height(4.dp))
+            }
+
+            // Danger-edge fade toggle
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Danger Zone Fade", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Show a subtle gradient on the edges that may conflict with system gestures",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = settings.cornerZoneDangerFade,
+                        onCheckedChange = {
+                            coroutineScope.launch {
+                                settingsViewModel.updateSetting("cornerZoneDangerFade", it)
                             }
                         }
                     )
@@ -462,7 +535,7 @@ private fun CornerZoneCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
             )
-            Slider(
+            AppSlider(
                 value = config.holdDurationMs.toFloat(),
                 onValueChange = { onUpdate(config.copy(holdDurationMs = it.toInt())) },
                 valueRange = 200f..2000f,
@@ -523,7 +596,7 @@ private fun CornerZoneCard(
             Text(dwellSubLabel, style = MaterialTheme.typography.bodySmall,
                 fontStyle = FontStyle.Italic,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-            Slider(
+            AppSlider(
                 value = config.swipeDwellMs.toFloat(),
                 onValueChange = { onUpdate(config.copy(swipeDwellMs = it.toInt())) },
                 valueRange = 0f..500f,
@@ -691,7 +764,7 @@ private fun CornerZoneMinimalCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Hold Action", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "Fires after 500 ms long-press",
+                        "Fires after ${config.holdDurationMs} ms long-press",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
@@ -701,6 +774,18 @@ private fun CornerZoneMinimalCard(
                     onCheckedChange = { onUpdate(config.copy(holdEnabled = it)) },
                 )
             }
+
+            Text(
+                "Hold Duration: ${config.holdDurationMs} ms",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+            )
+            AppSlider(
+                value = config.holdDurationMs.toFloat(),
+                onValueChange = { onUpdate(config.copy(holdDurationMs = it.toInt())) },
+                valueRange = 200f..2000f,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             if (config.holdEnabled) {
                 Spacer(Modifier.height(4.dp))
@@ -740,6 +825,27 @@ private fun CornerZoneMinimalCard(
                 "Only directions pointing into the screen are available",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+            )
+
+            val isBottomCornerMinimal = cornerPos == Constants.CornerPosition.BOTTOM_LEFT ||
+                                       cornerPos == Constants.CornerPosition.BOTTOM_RIGHT
+            val dwellLabelMinimal = if (config.swipeDwellMs == 0) "Swipe Press Dwell: instant"
+                                    else "Swipe Press Dwell: ${config.swipeDwellMs} ms"
+            val dwellSubLabelMinimal = if (isBottomCornerMinimal)
+                "Minimum dwell before any swipe fires (bottom zones: swipe-up always uses at least 120 ms)"
+            else
+                "Minimum hold time before a swipe is recognised (0 = instant)"
+            Spacer(Modifier.height(4.dp))
+            Text(dwellLabelMinimal, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
+            Text(dwellSubLabelMinimal, style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+            AppSlider(
+                value = config.swipeDwellMs.toFloat(),
+                onValueChange = { onUpdate(config.copy(swipeDwellMs = it.toInt())) },
+                valueRange = 0f..500f,
+                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(4.dp))
             Constants.validSwipeDirs(cornerPos).forEach { dir ->
@@ -982,7 +1088,7 @@ private fun ZoneAppearanceControls(
     Spacer(Modifier.height(8.dp))
 
     Text("Zone Size: ${"%.0f".format(config.size)} dp", style = MaterialTheme.typography.bodyMedium)
-    Slider(
+    AppSlider(
         value = config.size,
         onValueChange = { onUpdate(config.copy(size = it)) },
         valueRange = 32f..200f,
@@ -990,7 +1096,7 @@ private fun ZoneAppearanceControls(
     )
 
     Text("Opacity: ${"%.0f".format(config.opacity * 100)}%", style = MaterialTheme.typography.bodyMedium)
-    Slider(
+    AppSlider(
         value = config.opacity,
         onValueChange = { onUpdate(config.copy(opacity = it)) },
         valueRange = 0f..1f,
@@ -1033,7 +1139,7 @@ private fun ZoneAppearanceControls(
 
     if (config.borderEnabled) {
         Text("Border Width: ${"%.1f".format(config.borderWidth)} dp", style = MaterialTheme.typography.bodyMedium)
-        Slider(
+        AppSlider(
             value = config.borderWidth,
             onValueChange = { onUpdate(config.copy(borderWidth = it)) },
             valueRange = 0.5f..8f,

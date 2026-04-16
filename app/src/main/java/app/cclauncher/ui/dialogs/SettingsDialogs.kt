@@ -7,7 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.viewmodels.ImportExportState
 import io.github.mlmgames.settings.core.backup.ValidationResult
 import kotlin.math.roundToInt
@@ -34,20 +36,16 @@ fun SliderSettingDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column {
-                Text(String.format(Locale.getDefault(), "%.1f", sliderValue))
-                Spacer(modifier = Modifier.height(16.dp))
-                Slider(
-                    value = sliderValue,
-                    onValueChange = {
-                        // Round to nearest step
-                        val steps = ((it - min) / step).roundToInt()
-                        sliderValue = min + (steps * step)
-                    },
-                    valueRange = min..max,
-                    steps = ((max - min) / step).toInt() - 1
-                )
-            }
+            AppSlider(
+                value = sliderValue,
+                onValueChange = {
+                    // Round to nearest step
+                    val steps = ((it - min) / step).roundToInt()
+                    sliderValue = min + (steps * step)
+                },
+                valueRange = min..max,
+                steps = ((max - min) / step).toInt() - 1,
+            )
         },
         confirmButton = {
             TextButton(onClick = {
@@ -294,4 +292,59 @@ fun ImportValidationDialog(
             }
         }
     )
+}
+
+
+// ─── PREVIEWS (debug-only, stripped from release) ────────────────────────────
+
+@Preview(showBackground = true, name = "SliderSettingDialog")
+@Composable
+private fun PreviewSliderSettingDialog() {
+    MaterialTheme {
+        SliderSettingDialog(
+            title = "Text Size",
+            currentValue = 1.0f,
+            min = 0.5f,
+            max = 2.0f,
+            step = 0.1f,
+            onDismiss = {},
+            onValueSelected = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "DropdownSettingDialog")
+@Composable
+private fun PreviewDropdownSettingDialog() {
+    MaterialTheme {
+        DropdownSettingDialog(
+            title = "Theme",
+            options = listOf("System", "Light", "Dark"),
+            selectedIndex = 2,
+            onDismiss = {},
+            onOptionSelected = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "ImportExportResult - Success")
+@Composable
+private fun PreviewImportExportResultSuccess() {
+    MaterialTheme {
+        ImportExportResultDialog(
+            state = ImportExportState.ExportSuccess,
+            onDismiss = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "ImportExportResult - Error")
+@Composable
+private fun PreviewImportExportResultError() {
+    MaterialTheme {
+        ImportExportResultDialog(
+            state = ImportExportState.Error("Failed to read backup file"),
+            onDismiss = {}
+        )
+    }
 }

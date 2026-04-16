@@ -784,6 +784,33 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun setFolderHideTitle(folderId: String, hide: Boolean) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) folder.copy(hideTitle = hide) else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun setFolderHideCloseButton(folderId: String, hide: Boolean) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) folder.copy(hideCloseButton = hide) else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun setFolderHideOutline(folderId: String, hide: Boolean) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) folder.copy(hideOutline = hide) else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun updateHomeAppTextSize(appItem: HomeItem.App, textSize: Float) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value

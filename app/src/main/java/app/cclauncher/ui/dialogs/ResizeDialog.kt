@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cclauncher.data.HomeItem
+import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.BaseDialog
 import kotlin.math.roundToInt
 
@@ -85,7 +86,7 @@ private fun ResizeSliders(
         Text("Width (columns): $colSpan")
 
         if (maxColSpan > 1) {
-            Slider(
+            AppSlider(
                 value = colSpan.toFloat(),
                 onValueChange = { newValue ->
                     onColSpanChange(newValue.roundToInt().coerceIn(1, maxColSpan))
@@ -108,7 +109,7 @@ private fun ResizeSliders(
         Text("Height (rows): $rowSpan")
 
         if (maxRowSpan > 1) {
-            Slider(
+            AppSlider(
                 value = rowSpan.toFloat(),
                 onValueChange = { newValue ->
                     onRowSpanChange(newValue.roundToInt().coerceIn(1, maxRowSpan))

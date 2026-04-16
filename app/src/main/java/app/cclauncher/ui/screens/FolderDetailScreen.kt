@@ -51,6 +51,7 @@ import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
+import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ColorPickerDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -141,8 +142,74 @@ fun FolderDetailScreen(
             }
 
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hide Folder Name", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Don't show the folder title in the overlay header",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = folder.hideTitle,
+                        onCheckedChange = { viewModel.setFolderHideTitle(folderId, it) },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hide Close Button", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Don't show the × button (folder still closes on back/outside tap)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = folder.hideCloseButton,
+                        onCheckedChange = { viewModel.setFolderHideCloseButton(folderId, it) },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hide Folder Outline", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Remove the rounded border around the folder overlay",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = folder.hideOutline,
+                        onCheckedChange = { viewModel.setFolderHideOutline(folderId, it) },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
                 Text("Grid Rows: ${gridRows.toInt()}", style = MaterialTheme.typography.labelLarge)
-                Slider(
+                AppSlider(
                     value = gridRows,
                     onValueChange = { gridRows = it },
                     onValueChangeFinished = {
@@ -157,7 +224,7 @@ fun FolderDetailScreen(
 
             item {
                 Text("Grid Columns: ${gridColumns.toInt()}", style = MaterialTheme.typography.labelLarge)
-                Slider(
+                AppSlider(
                     value = gridColumns,
                     onValueChange = { gridColumns = it },
                     onValueChangeFinished = {
@@ -175,7 +242,7 @@ fun FolderDetailScreen(
                     "App Text Size (Default): ${"%.2f".format(appTextSize)}",
                     style = MaterialTheme.typography.labelLarge,
                 )
-                Slider(
+                AppSlider(
                     value = appTextSize,
                     onValueChange = { appTextSize = it },
                     onValueChangeFinished = {

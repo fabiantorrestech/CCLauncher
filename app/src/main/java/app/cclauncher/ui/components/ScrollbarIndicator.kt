@@ -34,7 +34,7 @@ fun ScrollbarIndicator(
     reverseLayout: Boolean = false,
     alignToStart: Boolean = false,
     modifier: Modifier = Modifier,
-    thumbWidthDp: Dp = 6.dp,
+    thumbWidthDp: Dp = 8.dp,
     minThumbHeightDp: Dp = 40.dp,
     touchTargetWidthDp: Dp = 36.dp,
 ) {

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -95,6 +96,7 @@ import app.cclauncher.settings.AppSettingsSchema
 import app.cclauncher.settings.ColorPicker
 import app.cclauncher.settings.FontPicker
 import app.cclauncher.settings.IconPackPicker
+import androidx.compose.ui.tooling.preview.Preview
 import app.cclauncher.ui.components.PageReduceWarningDialog
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.dialogs.ImportExportResultDialog
@@ -890,6 +892,17 @@ fun SettingsScreen(
                                 item(key = "cat_${tab.title}") {
                                     SettingsSection(title = tab.title) {
                                         categoryFields.forEach { field ->
+                                            // Sub-header before the swipe-direction group
+                                            if (tab.category == app.cclauncher.settings.Gestures::class &&
+                                                field.name == "gestureSensitivity") {
+                                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                Text(
+                                                    "Swipe Gestures",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
+                                                )
+                                            }
                                             key(field.name) {
                                                 SettingsFieldRenderer(
                                                     field = field,
@@ -946,6 +959,13 @@ fun SettingsScreen(
                                         }
                                         // Corner zones section at the end of Gestures tab
                                         if (tab.category == app.cclauncher.settings.Gestures::class) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                            Text(
+                                                "Corner Zones",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
+                                            )
                                             SettingsAction(
                                                 title = "Configure Corner Zones",
                                                 description = "Set up tap & hold shortcut zones in the home screen corners",
@@ -1457,4 +1477,160 @@ fun isAccessServiceEnabled(context: Context): Boolean {
 fun isClauncherDefault(context: Context): Boolean {
     val permissionManager = PermissionManager(context)
     return permissionManager.isDefaultLauncher()
+}
+
+// ─── PREVIEWS (debug-only, stripped from release) ────────────────────────────
+// Note: SettingsScreen uses Koin ViewModels so can't be previewed directly.
+// These previews show the tab + section layout structure with fake data so you
+// can adjust spacing, typography, and row layout in the IDE without running the app.
+
+@Preview(showBackground = true, name = "Settings - General Tab", widthDp = 400, heightDp = 800)
+@Composable
+private fun PreviewSettingsGeneralTab() {
+    MaterialTheme {
+        Scaffold(
+            topBar = {
+                TopAppBar(title = { Text("Settings") })
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                val tabs = listOf("General", "Appearance", "Layout", "Gestures", "Widgets", "Folders", "System", "Backup")
+                val pagerState = rememberPagerState(pageCount = { tabs.size })
+                val scope = rememberCoroutineScope()
+
+                PrimaryScrollableTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    edgePadding = 16.dp,
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    divider = {},
+                ) {
+                    tabs.forEachIndexed { index, label ->
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                            text = { Text(label, style = MaterialTheme.typography.labelLarge) }
+                        )
+                    }
+                }
+
+                HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        when (page) {
+                            0 -> item {
+                                SettingsSection(title = "General") {
+                                    SettingsToggle(title = "Show App Names", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Auto Show Keyboard", isChecked = true, onCheckedChange = {})
+                                    SettingsToggle(title = "Auto Open Single Matches", isChecked = true, onCheckedChange = {})
+                                    SettingsItem(title = "Search Bar Placement", subtitle = "Top", onClick = {})
+                                    SettingsItem(title = "Search Type", subtitle = "Contains", onClick = {})
+                                    SettingsItem(title = "Default Screen", subtitle = "Home", onClick = {})
+                                    SettingsItem(title = "Search Sort Order", subtitle = "Alphabetical", onClick = {})
+                                    SettingsToggle(title = "Show Hidden in Search", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Show Web Search Option", isChecked = true, onCheckedChange = {})
+                                    SettingsToggle(title = "Return to Home After App", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Show Pinned Shortcuts", isChecked = true, onCheckedChange = {})
+                                    SettingsToggle(title = "Show Scrollbar", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "App Drawer Tap to Open", isChecked = true, onCheckedChange = {})
+                                }
+                            }
+                            1 -> item {
+                                SettingsSection(title = "Appearance") {
+                                    SettingsItem(title = "Theme", subtitle = "Dark", onClick = {})
+                                    SettingsItem(title = "Font Weight", subtitle = "Normal", onClick = {})
+                                    SettingsToggle(title = "Use System Font", isChecked = true, onCheckedChange = {})
+                                    SettingsItem(title = "Custom Font", subtitle = "None selected", onClick = {})
+                                    SettingsToggle(title = "Use Dynamic Theme", isChecked = false, onCheckedChange = {})
+                                    SettingsItem(title = "Home Text Size", subtitle = "1.0", onClick = {})
+                                    SettingsItem(title = "Search Results Text Size", subtitle = "1.0", onClick = {})
+                                    SettingsItem(title = "Icon Corner Radius", subtitle = "0", onClick = {})
+                                    SettingsItem(title = "Home App Label Alignment", subtitle = "Left", onClick = {})
+                                    SettingsItem(title = "App Drawer Alignment", subtitle = "Left", onClick = {})
+                                    SettingsToggle(title = "Use Custom Text Color", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Show App Icons on Home Screen", isChecked = false, onCheckedChange = {})
+                                    SettingsItem(title = "Item Spacing", subtitle = "Small", onClick = {})
+                                    SettingsItem(title = "Icon Pack", subtitle = "Default", onClick = {})
+                                    SettingsAction(title = "Set Plain Wallpaper", description = "Set a plain black/white wallpaper based on theme", onClick = {})
+                                    SettingsToggle(title = "Auto Update Wallpaper", isChecked = false, onCheckedChange = {})
+                                    SettingsItem(title = "Screen Orientation", subtitle = "System Default", onClick = {})
+                                }
+                            }
+                            2 -> item {
+                                SettingsSection(title = "Layout") {
+                                    SettingsToggle(title = "Show Status Bar", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Scale Home Apps", isChecked = true, onCheckedChange = {})
+                                    SettingsItem(title = "Home Screen Rows", subtitle = "8", onClick = {})
+                                    SettingsItem(title = "Home Screen Columns", subtitle = "4", onClick = {})
+                                    SettingsItem(title = "Home Screen Pages", subtitle = "1", onClick = {})
+                                    SettingsToggle(title = "Show Page Indicator", isChecked = true, onCheckedChange = {})
+                                    SettingsToggle(title = "Show Grid Overlay in Move Mode", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Show App Icons in Portrait", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Show App Icons in Landscape", isChecked = false, onCheckedChange = {})
+                                }
+                            }
+                            3 -> item {
+                                SettingsSection(title = "Gestures") {
+                                    SettingsItem(title = "Gesture Sensitivity", subtitle = "1.0", onClick = {})
+                                    SettingsToggle(title = "Double Tap to Lock Screen", isChecked = false, onCheckedChange = {})
+                                    SettingsToggle(title = "Long Press in App Drawer", isChecked = true, onCheckedChange = {})
+                                    SettingsToggle(title = "Swipe Gestures in Folders", isChecked = false, onCheckedChange = {})
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        "Swipe Gestures",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
+                                    )
+                                    SettingsItem(title = "Swipe Down Action", subtitle = "Notifications", onClick = {})
+                                    SettingsItem(title = "Swipe Up Action", subtitle = "Search", onClick = {})
+                                    SettingsItem(title = "Swipe Left Action", subtitle = "None", onClick = {})
+                                    SettingsItem(title = "Swipe Right Action", subtitle = "None", onClick = {})
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                    Text(
+                                        "Corner Zones",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
+                                    )
+                                    SettingsAction(title = "Configure Corner Zones", description = "Set up tap & hold shortcut zones in the home screen corners", onClick = {})
+                                }
+                            }
+                            4 -> item {
+                                SettingsSection(title = "Widgets") {
+                                    SettingsAction(title = "Add Widget", description = "Add a widget to your home screen", onClick = {})
+                                }
+                            }
+                            5 -> item {
+                                SettingsSection(title = "Folders") {
+                                    SettingsToggle(title = "Show Folder Icon", isChecked = true, onCheckedChange = {})
+                                    SettingsItem(title = "Folder Background Opacity", subtitle = "0.6", onClick = {})
+                                    SettingsAction(title = "Add Folder", description = "Create a new folder on your home screen", onClick = {})
+                                    SettingsAction(title = "Manage Folders", description = "View and configure existing folders", onClick = {})
+                                }
+                            }
+                            6 -> item {
+                                SettingsSection(title = "System") {
+                                    SettingsItem(title = "Set as Default Launcher", subtitle = "CCLauncher is not default", onClick = {})
+                                    SettingsToggle(title = "Lock Settings", description = "Prevent changes to settings without a PIN", isChecked = false, onCheckedChange = {})
+                                    SettingsItem(title = "Hidden Apps", onClick = {})
+                                    SettingsItem(title = "App Info", onClick = {})
+                                    SettingsItem(title = "About CCLauncher", subtitle = "1.0.0", onClick = {})
+                                }
+                            }
+                            7 -> item {
+                                SettingsSection(title = "Backup") {
+                                    SettingsAction(title = "Export Settings", description = "Save your settings to a backup file", onClick = {})
+                                    SettingsAction(title = "Import Settings", description = "Restore settings from a backup file", onClick = {})
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
