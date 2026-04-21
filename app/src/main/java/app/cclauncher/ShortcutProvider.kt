@@ -57,7 +57,7 @@ class ShortcutProvider : ContentProvider() {
                         ?: continue  // skip non-web shortcuts
 
                     val label = shortcut.shortLabel?.toString() ?: shortcut.id
-                    cursor.addRow(arrayOf(rowId++, label, url, shortcut.`package`, shortcut.id))
+                    cursor.addRow(arrayOf<Any>(rowId++, label, url, shortcut.`package`, shortcut.id))
                 }
             } catch (_: SecurityException) {
                 Log.d(TAG, "SecurityException for user $user — skipping")
