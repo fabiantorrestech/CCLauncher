@@ -124,7 +124,7 @@ fun AppDrawerScreen(
     val homeLayoutState by viewModel.homeLayoutState.collectAsState()
     val homeFolders by remember { derivedStateOf { homeLayoutState.items.filterIsInstance<HomeItem.Folder>() } }
 
-    var searchQuery by remember { mutableStateOf("") }
+    val searchQuery = uiState.searchQuery
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -187,7 +187,6 @@ fun AppDrawerScreen(
 
     // Clear search when returning to this screen
     LaunchedEffect(Unit) {
-        searchQuery = ""
         viewModel.searchApps("")
     }
 
@@ -198,7 +197,6 @@ fun AppDrawerScreen(
             onAppClick(app)
         } else {
             Log.d("AppDrawer", "Calling onAppClick to OPEN app")
-            searchQuery = ""
             viewModel.searchApps("")
             focusManager.clearFocus()
             keyboardController?.hide()
@@ -212,7 +210,6 @@ fun AppDrawerScreen(
     }
 
     LaunchedEffect(Unit) { viewModel.loadApps() }
-    LaunchedEffect(searchQuery) { viewModel.searchApps(searchQuery) }
 
     LaunchedEffect(settings.autoShowKeyboard, focusRequester, searchQuery) {
         if (settings.autoShowKeyboard && searchQuery.isEmpty()) {
@@ -387,7 +384,7 @@ fun AppDrawerScreen(
             ) {
                 AppDrawerSearch(
                     searchQuery = searchQuery,
-                    onSearchChanged = { query -> searchQuery = query },
+                    onSearchChanged = { query -> viewModel.searchApps(query) },
                     modifier = Modifier.focusRequester(focusRequester).weight(1f),
                     onEnterPressed = {
                         val appsToOpen = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
@@ -566,7 +563,7 @@ fun AppDrawerScreen(
             ) {
                 AppDrawerSearch(
                     searchQuery = searchQuery,
-                    onSearchChanged = { query -> searchQuery = query },
+                    onSearchChanged = { query -> viewModel.searchApps(query) },
                     modifier = Modifier.focusRequester(focusRequester).weight(1f),
                     onEnterPressed = {
                         val appsToOpen = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps

@@ -96,6 +96,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     private val _appDrawerState = MutableStateFlow(AppDrawerUiState())
     val appDrawerState: StateFlow<AppDrawerUiState> = _appDrawerState.asStateFlow()
+    private val appDrawerSearchQuery = MutableStateFlow("")
 
     // App list state
     private val _appList = MutableStateFlow<List<AppModel>>(emptyList())
@@ -250,6 +251,46 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 .collect { 
                     requestAppReload("searchSettingsChanged", forceEmit = true)
                     reapplySearchFilter() 
+                }
+        }
+
+        viewModelScope.launch {
+            appDrawerSearchQuery
+                .collectLatest { query ->
+                    _appDrawerState.update {
+                        it.copy(
+                            searchQuery = query,
+                            isLoading = true,
+                            error = null
+                        )
+                    }
+
+                    try {
+                        val filtered = filterAndRank(query)
+                        _appDrawerState.update { current ->
+                            if (current.searchQuery != query) {
+                                current
+                            } else {
+                                current.copy(
+                                    filteredApps = filtered,
+                                    isLoading = false,
+                                    error = null
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        snackbarManager.show("Search failed: ${e.message}")
+                        _appDrawerState.update { current ->
+                            if (current.searchQuery != query) {
+                                current
+                            } else {
+                                current.copy(
+                                    isLoading = false,
+                                    error = e.message
+                                )
+                            }
+                        }
+                    }
                 }
         }
 
@@ -2062,20 +2103,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
      * Search apps by query with alias support.
      */
     fun searchApps(query: String) {
-        viewModelScope.launch {
-            _appDrawerState.value = _appDrawerState.value.copy(searchQuery = query, isLoading = true)
-            try {
-                val filtered = filterAndRank(query)
-                _appDrawerState.value = _appDrawerState.value.copy(
-                    filteredApps = filtered,
-                    isLoading = false,
-                    error = null
-                )
-            } catch (e: Exception) {
-                snackbarManager.show("Search failed: ${e.message}")
-                _appDrawerState.value = _appDrawerState.value.copy(isLoading = false, error = e.message)
-            }
-        }
+        appDrawerSearchQuery.value = query
     }
 
     private suspend fun filterAndRank(query: String): List<AppModel> {
