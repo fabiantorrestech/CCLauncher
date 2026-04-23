@@ -1,11 +1,14 @@
 package app.cclauncher.ui.screens
 
 import android.annotation.SuppressLint
+import android.net.Uri
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -179,6 +182,48 @@ fun HomeScreen(
     var showFolderContextMenu by remember { mutableStateOf<HomeItem.Folder?>(null) }
     var resizeDialogItem by remember { mutableStateOf<HomeItem?>(null) }
     var openFolderId by remember { mutableStateOf<String?>(null) }
+    var pendingHomeAppFontItem by remember { mutableStateOf<HomeItem.App?>(null) }
+    var pendingFolderTitleFontItem by remember { mutableStateOf<HomeItem.Folder?>(null) }
+    var pendingFolderAppFontItem by remember { mutableStateOf<Pair<String, FolderApp>?>(null) }
+
+    val fontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            if (uri == null) {
+                pendingHomeAppFontItem = null
+                pendingFolderTitleFontItem = null
+                pendingFolderAppFontItem = null
+                return@rememberLauncherForActivityResult
+            }
+            coroutineScope.launch {
+                val repo = viewModel.settingsRepository
+                pendingHomeAppFontItem?.let { appItem ->
+                    val newPath = repo.importFontFile(uri, "home_item_font")
+                    if (newPath != null) {
+                        if (appItem.labelFontPath.isNotBlank()) repo.deleteFontFile(appItem.labelFontPath)
+                        viewModel.updateHomeAppLabelFont(appItem, newPath)
+                    }
+                }
+                pendingFolderTitleFontItem?.let { folderItem ->
+                    val newPath = repo.importFontFile(uri, "folder_title_font")
+                    if (newPath != null) {
+                        if (folderItem.titleFontPath.isNotBlank()) repo.deleteFontFile(folderItem.titleFontPath)
+                        viewModel.updateFolderTitleFont(folderItem.id, newPath)
+                    }
+                }
+                pendingFolderAppFontItem?.let { (folderId, folderApp) ->
+                    val newPath = repo.importFontFile(uri, "folder_item_font")
+                    if (newPath != null) {
+                        if (folderApp.labelFontPath.isNotBlank()) repo.deleteFontFile(folderApp.labelFontPath)
+                        viewModel.updateFolderAppLabelFont(folderId, folderApp, newPath)
+                    }
+                }
+                pendingHomeAppFontItem = null
+                pendingFolderTitleFontItem = null
+                pendingFolderAppFontItem = null
+            }
+        }
+    )
 
     val onSwipeUp: () -> Unit = {
         if (openFolderId == null || settings.swipeGesturesInFolders)
@@ -347,6 +392,10 @@ fun HomeScreen(
                         viewModel.moveItemToPage(app, targetPage)
                         showAppContextMenu = null
                     },
+                    onRename = { newName ->
+                        viewModel.renameApp(it.appModel, newName)
+                        showAppContextMenu = null
+                    },
                     onAddToFolder = { folder ->
                         viewModel.addAppToFolder(folder.id, it.appModel)
                         viewModel.removeAppFromHomeScreen(it)
@@ -361,6 +410,18 @@ fun HomeScreen(
                     showShortcutIconSetting = settings.showShortcutIcon,
                     onIconPlacementChange = { placement ->
                         viewModel.updateHomeAppIconPlacement(it, placement)
+                    },
+                    onSelectFont = {
+                        pendingHomeAppFontItem = it
+                        pendingFolderTitleFontItem = null
+                        pendingFolderAppFontItem = null
+                        fontPickerLauncher.launch("font/*")
+                    },
+                    onResetFont = {
+                        if (it.labelFontPath.isNotBlank()) {
+                            viewModel.settingsRepository.deleteFontFile(it.labelFontPath)
+                        }
+                        viewModel.updateHomeAppLabelFont(it, "")
                     },
                     onNavigateToSettings = onNavigateToSettings,
                 )
@@ -449,6 +510,18 @@ fun HomeScreen(
                     onIconPlacementChange = { placement ->
                         viewModel.updateFolderIconPlacement(it.id, placement)
                     },
+                    onSelectFont = {
+                        pendingFolderTitleFontItem = it
+                        pendingHomeAppFontItem = null
+                        pendingFolderAppFontItem = null
+                        fontPickerLauncher.launch("font/*")
+                    },
+                    onResetFont = {
+                        if (it.titleFontPath.isNotBlank()) {
+                            viewModel.settingsRepository.deleteFontFile(it.titleFontPath)
+                        }
+                        viewModel.updateFolderTitleFont(it.id, "")
+                    },
                     onNavigateToSettings = onNavigateToSettings,
                 )
             }
@@ -517,6 +590,21 @@ fun HomeScreen(
                     },
                     onAppIconPlacementChange = { folderApp, placement ->
                         viewModel.updateFolderAppIconPlacement(fid, folderApp, placement)
+                    },
+                    onAppRename = { folderApp, newName ->
+                        viewModel.renameApp(folderApp.toAppModel(), newName)
+                    },
+                    onAppSelectFont = { folderApp ->
+                        pendingFolderAppFontItem = fid to folderApp
+                        pendingHomeAppFontItem = null
+                        pendingFolderTitleFontItem = null
+                        fontPickerLauncher.launch("font/*")
+                    },
+                    onAppResetFont = { folderApp ->
+                        if (folderApp.labelFontPath.isNotBlank()) {
+                            viewModel.settingsRepository.deleteFontFile(folderApp.labelFontPath)
+                        }
+                        viewModel.updateFolderAppLabelFont(fid, folderApp, "")
                     },
                 )
             }
@@ -742,6 +830,7 @@ private fun HomeScreenContent(
                             appTextSize = item.appTextSize,
                             appLabelAlignment = item.appLabelAlignment,
                             shortcutIconPlacement = item.iconPlacement,
+                            labelFontPath = item.labelFontPath,
                         )
                     }
 
@@ -963,18 +1052,25 @@ fun HomeAppContextMenu(
     onResize: (HomeItem.App) -> Unit,
     onMove: (HomeItem.App) -> Unit,
     onMoveToPage: (HomeItem.App, Int) -> Unit,
+    onRename: (String) -> Unit = {},
     onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
     showShortcutIconSetting: Boolean = true,
     onIconPlacementChange: (Int) -> Unit = {},
+    onSelectFont: () -> Unit = {},
+    onResetFont: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
+    var showCustomizeMenu by remember { mutableStateOf(false) }
+    var showFontMenu by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
     var showIconPlacementPicker by remember { mutableStateOf(false) }
+    var renameValue by remember(appItem.id, appItem.appModel.appLabel) { mutableStateOf(appItem.appModel.appLabel) }
 
     if (showPageSelector) {
         PageSelectorDialog(
@@ -1041,6 +1137,79 @@ fun HomeAppContextMenu(
                 onDismiss()
             }
         )
+    } else if (showFontMenu) {
+        AlertDialog(
+            onDismissRequest = { showFontMenu = false },
+            title = { Text("Select Font") },
+            text = {
+                Column {
+                    DropdownMenuItem(
+                        text = { Text("Select Font...") },
+                        onClick = { onSelectFont(); onDismiss() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Default Font") },
+                        onClick = { onResetFont(); onDismiss() }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFontMenu = false }) { Text("Back") }
+            }
+        )
+    } else if (showCustomizeMenu) {
+        AlertDialog(
+            onDismissRequest = { showCustomizeMenu = false },
+            title = { Text("Customize") },
+            text = {
+                Column {
+                    DropdownMenuItem(
+                        text = { Text("Text Size...") },
+                        onClick = { showTextSizeEditor = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Label Alignment...") },
+                        onClick = { showLabelAlignmentPicker = true }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Select Font...") },
+                        onClick = { showFontMenu = true }
+                    )
+                    if (appItem.appModel.isSystemShortcut && showShortcutIconSetting) {
+                        DropdownMenuItem(
+                            text = { Text("Change Icon Placement...") },
+                            onClick = { showIconPlacementPicker = true }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCustomizeMenu = false }) { Text("Back") }
+            }
+        )
+    } else if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text("Rename ${appItem.appModel.appLabel}") },
+            text = {
+                OutlinedTextField(
+                    value = renameValue,
+                    onValueChange = { renameValue = it },
+                    singleLine = true,
+                    label = { Text("New name") },
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRename(renameValue)
+                    showRenameDialog = false
+                    onDismiss()
+                }) { Text("Save") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
+            }
+        )
     } else if (showFolderPicker) {
         AlertDialog(
             onDismissRequest = { showFolderPicker = false },
@@ -1097,19 +1266,13 @@ fun HomeAppContextMenu(
                         onClick = { onResize(appItem); onDismiss() }
                     )
                     DropdownMenuItem(
-                        text = { Text("Text Size") },
-                        onClick = { showTextSizeEditor = true }
+                        text = { Text("Customize...") },
+                        onClick = { showCustomizeMenu = true }
                     )
                     DropdownMenuItem(
-                        text = { Text("Label Alignment") },
-                        onClick = { showLabelAlignmentPicker = true }
+                        text = { Text("Rename") },
+                        onClick = { showRenameDialog = true }
                     )
-                    if (appItem.appModel.isSystemShortcut && showShortcutIconSetting) {
-                        DropdownMenuItem(
-                            text = { Text("Change Icon Placement") },
-                            onClick = { showIconPlacementPicker = true }
-                        )
-                    }
                     if (folders.isNotEmpty() && onAddToFolder != null) {
                         DropdownMenuItem(
                             text = { Text("Add to Folder...") },
@@ -1665,10 +1828,14 @@ fun FolderContextMenu(
     onLabelAlignmentChange: (Int) -> Unit = {},
     showFolderIconSetting: Boolean = true,
     onIconPlacementChange: (Int) -> Unit = {},
+    onSelectFont: () -> Unit = {},
+    onResetFont: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
+    var showCustomizeMenu by remember { mutableStateOf(false) }
+    var showFontMenu by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
     var showIconPlacementPicker by remember { mutableStateOf(false) }
@@ -1759,6 +1926,47 @@ fun FolderContextMenu(
                 onDismiss()
             }
         )
+    } else if (showFontMenu) {
+        AlertDialog(
+            onDismissRequest = { showFontMenu = false },
+            title = { Text("Select Font") },
+            text = {
+                Column {
+                    DropdownMenuItem(
+                        text = { Text("Select Font...") },
+                        onClick = { onSelectFont(); onDismiss() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Default Font") },
+                        onClick = { onResetFont(); onDismiss() }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFontMenu = false }) { Text("Back") }
+            }
+        )
+    } else if (showCustomizeMenu) {
+        AlertDialog(
+            onDismissRequest = { showCustomizeMenu = false },
+            title = { Text("Customize") },
+            text = {
+                Column {
+                    DropdownMenuItem(text = { Text("Text Size...") }, onClick = { showTextSizeEditor = true })
+                    DropdownMenuItem(text = { Text("Label Alignment...") }, onClick = { showLabelAlignmentPicker = true })
+                    DropdownMenuItem(text = { Text("Select Font...") }, onClick = { showFontMenu = true })
+                    if (showFolderIconSetting) {
+                        DropdownMenuItem(
+                            text = { Text("Change Icon Placement...") },
+                            onClick = { showIconPlacementPicker = true }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCustomizeMenu = false }) { Text("Back") }
+            }
+        )
     } else if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -1800,11 +2008,7 @@ fun FolderContextMenu(
                         DropdownMenuItem(text = { Text("Move to page...") }, onClick = { showPageSelector = true })
                     }
                     DropdownMenuItem(text = { Text("Resize") }, onClick = { onResize(folderItem); onDismiss() })
-                    DropdownMenuItem(text = { Text("Text Size") }, onClick = { showTextSizeEditor = true })
-                    DropdownMenuItem(text = { Text("Label Alignment") }, onClick = { showLabelAlignmentPicker = true })
-                    if (showFolderIconSetting) {
-                        DropdownMenuItem(text = { Text("Change Icon Placement") }, onClick = { showIconPlacementPicker = true })
-                    }
+                    DropdownMenuItem(text = { Text("Customize...") }, onClick = { showCustomizeMenu = true })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
                     DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemoveFromHome(folderItem); onDismiss() })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showDeleteConfirm = true })

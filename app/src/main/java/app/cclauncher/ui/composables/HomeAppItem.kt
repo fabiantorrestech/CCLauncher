@@ -42,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
+import app.cclauncher.loadFontFamily
+import app.cclauncher.LocalLauncherFontSettings
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.helper.IconCache
 import kotlinx.coroutines.launch
@@ -58,6 +60,7 @@ fun HomeAppItem(
     appTextSize: Float = 1.0f,
     appLabelAlignment: Int = -1,
     shortcutIconPlacement: Int = Constants.IconPlacement.LEFT,
+    labelFontPath: String = "",
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -138,6 +141,16 @@ fun HomeAppItem(
     }
     val showShortcutIcon = app.isSystemShortcut && settings.showShortcutIcon
     val showShortcutIconOnRight = shortcutIconPlacement == Constants.IconPlacement.RIGHT
+    val launcherFontSettings = LocalLauncherFontSettings.current
+    val labelFontFamily = remember(launcherFontSettings, labelFontPath) {
+        if (!launcherFontSettings.customFontsEnabled) {
+            null
+        } else {
+            loadFontFamily(labelFontPath)
+                ?: loadFontFamily(launcherFontSettings.homeDefaultFontPath)
+                ?: loadFontFamily(launcherFontSettings.mainFontPath)
+        }
+    }
 
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongClick by rememberUpdatedState(onLongClick)
@@ -191,6 +204,7 @@ fun HomeAppItem(
                         text = app.appLabel,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = effectiveFontSize,
+                            fontFamily = labelFontFamily,
                             fontWeight = fontWeight
                         ),
                         color = textColor,
@@ -212,6 +226,7 @@ fun HomeAppItem(
                     text = app.appLabel,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = effectiveFontSize,
+                        fontFamily = labelFontFamily,
                         fontWeight = fontWeight
                     ),
                     color = textColor,

@@ -12,9 +12,11 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -30,6 +32,34 @@ import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppSettings
 import org.koin.compose.koinInject
 import java.io.File
+
+data class LauncherFontSettings(
+    val customFontsEnabled: Boolean = false,
+    val mainFontPath: String = "",
+    val homeDefaultFontPath: String = "",
+    val folderDefaultFontPath: String = "",
+    val appDrawerFontPath: String = "",
+)
+
+val LocalLauncherFontSettings = staticCompositionLocalOf { LauncherFontSettings() }
+
+fun loadFontFamily(path: String): FontFamily? {
+    if (path.isBlank()) return null
+    return try {
+        val fontFile = File(path)
+        if (!fontFile.exists()) return null
+        FontFamily(
+            Font(
+                file = fontFile,
+                weight = FontWeight.Normal,
+                style = FontStyle.Normal,
+            )
+        )
+    } catch (e: Exception) {
+        Log.e("CLauncherTheme", "Error loading font '$path': ${e.message}")
+        null
+    }
+}
 
 
 private val DarkColorScheme = darkColorScheme(
@@ -242,59 +272,59 @@ fun CLauncherTheme(
         }
     }
 
-    val customFontPath = settings.customFontPath
-
-    val fontFamily = remember(customFontPath) {
-        if (customFontPath.isNotEmpty()) {
-            try {
-                val fontFile = File(customFontPath)
-                if (fontFile.exists()) {
-                    FontFamily(
-                        Font(
-                            file = fontFile,
-                            weight = FontWeight.Normal,
-                            style = FontStyle.Normal,
-                        )
-                    )
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                Log.e("CLauncherTheme", "Error loading custom font: ${e.message}")
-                null
-            }
-        } else {
-            null
-        }
+    val customFontsEnabled = !settings.useSystemFont
+    val mainFontFamily = remember(customFontsEnabled, settings.customFontPath) {
+        if (customFontsEnabled) loadFontFamily(settings.customFontPath) else null
+    }
+    val headerFontFamily = remember(customFontsEnabled, settings.headerFontPath, settings.customFontPath) {
+        if (!customFontsEnabled) null else loadFontFamily(settings.headerFontPath) ?: mainFontFamily
+    }
+    val tertiaryFontFamily = remember(customFontsEnabled, settings.tertiaryFontPath, settings.customFontPath) {
+        if (!customFontsEnabled) null else loadFontFamily(settings.tertiaryFontPath) ?: mainFontFamily
     }
 
-    val baseTypography = defaultTypography() // NOTE: No need to use the text size scale (just scale home apps)
+    val launcherFontSettings = remember(settings) {
+        LauncherFontSettings(
+            customFontsEnabled = customFontsEnabled,
+            mainFontPath = settings.customFontPath,
+            homeDefaultFontPath = settings.homeLabelFontPath,
+            folderDefaultFontPath = settings.folderLabelFontPath,
+            appDrawerFontPath = settings.appDrawerLabelFontPath,
+        )
+    }
 
-    val typography = if (fontFamily != null) {
+    val baseTypography = defaultTypography()
+
+    val typography = if (customFontsEnabled) {
+        val header = headerFontFamily
+        val main = mainFontFamily
+        val tertiary = tertiaryFontFamily
         baseTypography.copy(
-            displayLarge = baseTypography.displayLarge.copy(fontFamily = fontFamily),
-            displayMedium = baseTypography.displayMedium.copy(fontFamily = fontFamily),
-            displaySmall = baseTypography.displaySmall.copy(fontFamily = fontFamily),
-            labelSmall = baseTypography.labelSmall.copy(fontFamily = fontFamily),
-            labelLarge = baseTypography.labelLarge.copy(fontFamily = fontFamily),
-            labelMedium = baseTypography.labelMedium.copy(fontFamily = fontFamily),
-            bodyLarge = baseTypography.bodyLarge.copy(fontFamily = fontFamily),
-            bodySmall = baseTypography.bodySmall.copy(fontFamily = fontFamily),
-            bodyMedium = baseTypography.bodyMedium.copy(fontFamily = fontFamily),
-            headlineLarge = baseTypography.headlineLarge.copy(fontFamily = fontFamily),
-            headlineSmall = baseTypography.headlineSmall.copy(fontFamily = fontFamily),
-            headlineMedium = baseTypography.headlineMedium.copy(fontFamily = fontFamily),
-            titleSmall = baseTypography.titleSmall.copy(fontFamily = fontFamily),
-            titleLarge = baseTypography.titleLarge.copy(fontFamily = fontFamily),
-            titleMedium = baseTypography.titleMedium.copy(fontFamily = fontFamily)
+            displayLarge = if (header != null) baseTypography.displayLarge.copy(fontFamily = header) else baseTypography.displayLarge,
+            displayMedium = if (header != null) baseTypography.displayMedium.copy(fontFamily = header) else baseTypography.displayMedium,
+            displaySmall = if (header != null) baseTypography.displaySmall.copy(fontFamily = header) else baseTypography.displaySmall,
+            headlineLarge = if (header != null) baseTypography.headlineLarge.copy(fontFamily = header) else baseTypography.headlineLarge,
+            headlineMedium = if (header != null) baseTypography.headlineMedium.copy(fontFamily = header) else baseTypography.headlineMedium,
+            headlineSmall = if (header != null) baseTypography.headlineSmall.copy(fontFamily = header) else baseTypography.headlineSmall,
+            titleLarge = if (header != null) baseTypography.titleLarge.copy(fontFamily = header) else baseTypography.titleLarge,
+            titleMedium = if (header != null) baseTypography.titleMedium.copy(fontFamily = header) else baseTypography.titleMedium,
+            titleSmall = if (main != null) baseTypography.titleSmall.copy(fontFamily = main) else baseTypography.titleSmall,
+            bodyLarge = if (main != null) baseTypography.bodyLarge.copy(fontFamily = main) else baseTypography.bodyLarge,
+            bodyMedium = if (main != null) baseTypography.bodyMedium.copy(fontFamily = main) else baseTypography.bodyMedium,
+            bodySmall = if (tertiary != null) baseTypography.bodySmall.copy(fontFamily = tertiary) else baseTypography.bodySmall,
+            labelLarge = if (tertiary != null) baseTypography.labelLarge.copy(fontFamily = tertiary) else baseTypography.labelLarge,
+            labelMedium = if (tertiary != null) baseTypography.labelMedium.copy(fontFamily = tertiary) else baseTypography.labelMedium,
+            labelSmall = if (tertiary != null) baseTypography.labelSmall.copy(fontFamily = tertiary) else baseTypography.labelSmall,
         )
     } else {
         baseTypography
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalLauncherFontSettings provides launcherFontSettings) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = typography,
+            content = content
+        )
+    }
 }

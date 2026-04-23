@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeLayout
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
@@ -137,24 +136,72 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
     suspend fun validateSettingsPin(pin: String): Boolean = settings.first().settingsLockPin == pin
 
     suspend fun setCustomFont(uri: Uri) {
-        try {
-            val fontFile = File(context.filesDir, Constants.CUSTOM_FONT_FILENAME)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(fontFile).use { output -> input.copyTo(output) }
-            }
-            repo.set("customFontPath", fontFile.absolutePath)
-        } catch (e: Exception) {
-            Log.e("SettingsRepo", "Failed to copy font file", e)
-        }
+        setFontForSetting("customFontPath", uri)
     }
 
     suspend fun clearCustomFont() {
-        val currentPath = settings.first().customFontPath
-        if (currentPath.isNotEmpty()) {
-            try { File(currentPath).delete() }
-            catch (e: Exception) { Log.e("SettingsRepo", "Error deleting old font file", e) }
+        clearFontForSetting("customFontPath")
+    }
+
+    suspend fun setFontForSetting(fieldName: String, uri: Uri) {
+        val oldPath = getFontPathForField(settings.first(), fieldName)
+        val newPath = copyFontToInternal(uri, fieldName) ?: return
+        try {
+            repo.set(fieldName, newPath)
+            deleteFontAtPath(oldPath)
+        } catch (e: Exception) {
+            deleteFontAtPath(newPath)
+            Log.e("SettingsRepo", "Failed updating font field: $fieldName", e)
         }
-        repo.set("customFontPath", "")
+    }
+
+    suspend fun clearFontForSetting(fieldName: String) {
+        val currentPath = getFontPathForField(settings.first(), fieldName)
+        if (currentPath.isNotEmpty()) {
+            deleteFontAtPath(currentPath)
+        }
+        repo.set(fieldName, "")
+    }
+
+    fun importFontFile(uri: Uri, slotHint: String): String? = copyFontToInternal(uri, slotHint)
+
+    fun deleteFontFile(path: String) = deleteFontAtPath(path)
+
+    private fun copyFontToInternal(uri: Uri, slotHint: String): String? {
+        return try {
+            val fontDir = File(context.filesDir, "fonts").apply { mkdirs() }
+            val cleanHint = slotHint.replace(Regex("[^a-zA-Z0-9_]"), "_")
+            val fontFile = File(fontDir, "${cleanHint}_${java.lang.System.currentTimeMillis()}.ttf")
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(fontFile).use { output -> input.copyTo(output) }
+            } ?: return null
+            fontFile.absolutePath
+        } catch (e: Exception) {
+            Log.e("SettingsRepo", "Failed to copy font file", e)
+            null
+        }
+    }
+
+    private fun deleteFontAtPath(path: String) {
+        if (path.isBlank()) return
+        try {
+            val file = File(path)
+            if (file.exists()) file.delete()
+        } catch (e: Exception) {
+            Log.e("SettingsRepo", "Error deleting font file: $path", e)
+        }
+    }
+
+    private fun getFontPathForField(settings: AppSettings, fieldName: String): String {
+        return when (fieldName) {
+            "customFontPath" -> settings.customFontPath
+            "headerFontPath" -> settings.headerFontPath
+            "tertiaryFontPath" -> settings.tertiaryFontPath
+            "homeLabelFontPath" -> settings.homeLabelFontPath
+            "folderLabelFontPath" -> settings.folderLabelFontPath
+            "appDrawerLabelFontPath" -> settings.appDrawerLabelFontPath
+            else -> ""
+        }
     }
 
     suspend fun toggleAppHidden(packageKey: String) {

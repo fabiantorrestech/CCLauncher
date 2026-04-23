@@ -252,12 +252,57 @@ data class AppSettings(
 
     @Setting(
         title = "Custom Font",
-        description = "Select a custom font file",
+        description = "Select the main font file for launcher UI fallback",
         category = Appearance::class,
         type = FontPicker::class,
         key = "CUSTOM_FONT_PATH",
     )
     val customFontPath: String = "",
+
+    @Setting(
+        title = "Header Font",
+        description = "Font used primarily for headers and titles",
+        category = Appearance::class,
+        type = FontPicker::class,
+        key = "HEADER_FONT_PATH",
+    )
+    val headerFontPath: String = "",
+
+    @Setting(
+        title = "Tertiary Font",
+        description = "Font used for supporting details and smaller labels",
+        category = Appearance::class,
+        type = FontPicker::class,
+        key = "TERTIARY_FONT_PATH",
+    )
+    val tertiaryFontPath: String = "",
+
+    @Setting(
+        title = "Home Label Font (Default)",
+        description = "Default font for labels on the home screen",
+        category = Appearance::class,
+        type = FontPicker::class,
+        key = "HOME_LABEL_FONT_PATH",
+    )
+    val homeLabelFontPath: String = "",
+
+    @Setting(
+        title = "Folder Label Font (Default)",
+        description = "Default font for folder tiles and folder overlay labels",
+        category = Folders::class,
+        type = FontPicker::class,
+        key = "FOLDER_LABEL_FONT_PATH",
+    )
+    val folderLabelFontPath: String = "",
+
+    @Setting(
+        title = "App Drawer Font",
+        description = "Font used for app labels in the app drawer",
+        category = Appearance::class,
+        type = FontPicker::class,
+        key = "APP_DRAWER_LABEL_FONT_PATH",
+    )
+    val appDrawerLabelFontPath: String = "",
 
     @Setting(
         title = "Use Dynamic Theme",

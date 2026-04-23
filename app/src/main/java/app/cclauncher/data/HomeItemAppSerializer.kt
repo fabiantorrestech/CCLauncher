@@ -30,6 +30,7 @@ import kotlinx.serialization.encoding.encodeStructure
         element<Float>("appTextSize")
         element<Int>("appLabelAlignment")
         element<Int>("iconPlacement")
+        element<String>("labelFontPath")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.App) {
@@ -51,6 +52,7 @@ import kotlinx.serialization.encoding.encodeStructure
             encodeFloatElement(descriptor, 14, value.appTextSize)
             encodeIntElement(descriptor, 15, value.appLabelAlignment)
             encodeIntElement(descriptor, 16, value.iconPlacement)
+            encodeStringElement(descriptor, 17, value.labelFontPath)
         }
     }
 
@@ -72,6 +74,7 @@ import kotlinx.serialization.encoding.encodeStructure
         var appTextSize = 1.0f
         var appLabelAlignment = -1
         var iconPlacement = Constants.IconPlacement.LEFT
+        var labelFontPath = ""
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -93,6 +96,7 @@ import kotlinx.serialization.encoding.encodeStructure
                     14 -> appTextSize = decodeFloatElement(descriptor, index)
                     15 -> appLabelAlignment = decodeIntElement(descriptor, index)
                     16 -> iconPlacement = decodeIntElement(descriptor, index)
+                    17 -> labelFontPath = decodeStringElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> {
                         decodeStringElement(descriptor, index)
@@ -122,6 +126,7 @@ import kotlinx.serialization.encoding.encodeStructure
             appTextSize = appTextSize,
             appLabelAlignment = appLabelAlignment,
             iconPlacement = iconPlacement,
+            labelFontPath = labelFontPath,
             page = page,
             row = row,
             column = column,
@@ -225,6 +230,8 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         element<Boolean>("hideOutline")
         element<Boolean>("tapOutsideToClose")
         element<Int>("iconPlacement")
+        element<String>("titleFontPath")
+        element<String>("defaultAppFontPath")
     }
 
     override fun serialize(encoder: Encoder, value: HomeItem.Folder) {
@@ -249,6 +256,8 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             encodeBooleanElement(descriptor, 17, value.hideOutline)
             encodeBooleanElement(descriptor, 18, value.tapOutsideToClose)
             encodeIntElement(descriptor, 19, value.iconPlacement)
+            encodeStringElement(descriptor, 20, value.titleFontPath)
+            encodeStringElement(descriptor, 21, value.defaultAppFontPath)
         }
     }
 
@@ -273,6 +282,8 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
         var hideOutline = false
         var tapOutsideToClose = true
         var iconPlacement = Constants.IconPlacement.LEFT
+        var titleFontPath = ""
+        var defaultAppFontPath = ""
 
         decoder.decodeStructure(descriptor) {
             while (true) {
@@ -297,6 +308,8 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
                     17 -> hideOutline = decodeBooleanElement(descriptor, index)
                     18 -> tapOutsideToClose = decodeBooleanElement(descriptor, index)
                     19 -> iconPlacement = decodeIntElement(descriptor, index)
+                    20 -> titleFontPath = decodeStringElement(descriptor, index)
+                    21 -> defaultAppFontPath = decodeStringElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> { /* skip unknown fields for forward compat */ }
                 }
@@ -319,6 +332,8 @@ object HomeItemFolderSerializer : KSerializer<HomeItem.Folder> {
             titleTextColor = titleTextColor,
             titleLabelAlignment = titleLabelAlignment,
             iconPlacement = iconPlacement,
+            titleFontPath = titleFontPath,
+            defaultAppFontPath = defaultAppFontPath,
             showOnHome = showOnHome,
             hideTitle = hideTitle,
             hideCloseButton = hideCloseButton,

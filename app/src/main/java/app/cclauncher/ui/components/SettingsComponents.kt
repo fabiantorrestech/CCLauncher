@@ -37,7 +37,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import app.cclauncher.helper.iconpack.IconPackManager
-import app.cclauncher.ui.viewmodels.SettingsViewModel
 
 /**
  * A settings section with a title and card container
@@ -299,12 +298,19 @@ fun IconPackSelectionDialog(
 @Composable
 fun FontPickerDialog(
     title: String,
+    currentPath: String,
     onDismiss: () -> Unit,
     onSelectClicked: () -> Unit,
     onResetClicked: () -> Unit,
-    viewModel: SettingsViewModel
 ) {
-    val fontInfo by viewModel.customFontInfo.collectAsState()
+    val fontInfo = remember(currentPath) {
+        if (currentPath.isBlank()) null else try {
+            val file = java.io.File(currentPath)
+            if (file.exists()) Pair(file.name, file.length()) else null
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -318,7 +324,7 @@ fun FontPickerDialog(
 
                 if (fontInfo != null) {
                     Text(
-                        "Size: ${Formatter.formatFileSize(LocalContext.current, fontInfo!!.second)}",
+                        "Size: ${Formatter.formatFileSize(LocalContext.current, fontInfo.second)}",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(modifier = Modifier.height(16.dp))

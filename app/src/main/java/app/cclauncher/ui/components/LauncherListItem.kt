@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +41,7 @@ fun LauncherListItem(
     iconSize: Dp = 40.dp,
     iconCornerRadius: Dp = 0.dp,
     fontScale: Float = 1.0f,
+    fontFamily: FontFamily? = null,
     fontWeight: FontWeight = FontWeight.Normal,
     textColor: Color? = null,
     horizontalPadding: Dp = 20.dp,
@@ -98,6 +100,7 @@ fun LauncherListItem(
                         text = label,
                         style = MaterialTheme.typography.bodyMedium.copy(
                             fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale,
+                            fontFamily = fontFamily,
                             fontWeight = fontWeight
                         ),
                         color = textColor ?: MaterialTheme.colorScheme.onSurface,
@@ -111,6 +114,7 @@ fun LauncherListItem(
                     text = label,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale,
+                        fontFamily = fontFamily,
                         fontWeight = fontWeight
                     ),
                     color = textColor ?: MaterialTheme.colorScheme.onSurface,
@@ -159,6 +163,7 @@ fun AppListItem(
     iconSize: Dp = 40.dp,
     iconCornerRadius: Dp = 0.dp,
     fontScale: Float = 1.0f,
+    fontFamily: FontFamily? = null,
     fontWeight: FontWeight = FontWeight.Normal,
     textColor: Color? = null,
     isRightAligned: Boolean = false,
@@ -175,6 +180,7 @@ fun AppListItem(
         iconSize = iconSize,
         iconCornerRadius = iconCornerRadius,
         fontScale = fontScale,
+        fontFamily = fontFamily,
         fontWeight = fontWeight,
         textColor = textColor,
         isRightAligned = isRightAligned,

@@ -189,12 +189,17 @@ fun SettingsScreen(
     // "swipeDirection" -> show folder-picker dialog for that direction; null = closed
     var swipeFolderPickerFor by remember { mutableStateOf<String?>(null) }
     var swipeFolderSearch by remember { mutableStateOf("") }
+    var pendingFontField by remember { mutableStateOf<String?>(null) }
 
 
     val pickFontLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri: Uri? ->
-            uri?.let { viewModel.setCustomFont(it) }
+            val fieldName = pendingFontField
+            if (uri != null && fieldName != null) {
+                viewModel.setFontForField(fieldName, uri)
+            }
+            pendingFontField = null
         }
     )
 
@@ -599,11 +604,14 @@ fun SettingsScreen(
             if (field != null && meta != null) {
                 FontPickerDialog(
                     title = meta.title,
+                    currentPath = (field.get(uiState) as? String).orEmpty(),
                     onDismiss = { showingDialog = null },
-                    onSelectClicked = { pickFontLauncher.launch("font/*") },
-                    viewModel = viewModel,
+                    onSelectClicked = {
+                        pendingFontField = field.name
+                        pickFontLauncher.launch("font/*")
+                    },
                     onResetClicked = {
-                        viewModel.clearCustomFont()
+                        viewModel.clearFontForField(field.name)
                         showingDialog = null
                     }
                 )

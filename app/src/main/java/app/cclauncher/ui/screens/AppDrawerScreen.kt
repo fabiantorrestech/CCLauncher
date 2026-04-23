@@ -88,6 +88,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.cclauncher.MainViewModel
+import app.cclauncher.loadFontFamily
 import app.cclauncher.data.AppShortcut
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
@@ -154,6 +155,14 @@ fun AppDrawerScreen(
         0 -> FontWeight.Thin; 1 -> FontWeight.Light; 2 -> FontWeight.Normal
         3 -> FontWeight.Medium; 4 -> FontWeight.Bold; 5 -> FontWeight.Black
         else -> FontWeight.Normal
+    }
+    val customFontsEnabled = !settings.useSystemFont
+    val appDrawerFontFamily = remember(customFontsEnabled, settings.appDrawerLabelFontPath, settings.customFontPath) {
+        if (!customFontsEnabled) {
+            null
+        } else {
+            loadFontFamily(settings.appDrawerLabelFontPath) ?: loadFontFamily(settings.customFontPath)
+        }
     }
 
     var selectedApp by remember { mutableStateOf<AppModel?>(null) }
@@ -492,6 +501,7 @@ fun AppDrawerScreen(
                                     showLabel = showLabelsInList,
                                     iconCornerRadius = settings.iconCornerRadius.dp,
                                     fontScale = searchResultsFontSize,
+                                    fontFamily = appDrawerFontFamily,
                                     fontWeight = fontWeight,
                                     textColor = customTextColor,
                                     isRightAligned = isRightAligned,
@@ -848,4 +858,3 @@ fun AppDrawerSearch(
         )
     )
 }
-

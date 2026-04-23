@@ -51,9 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.cclauncher.LocalLauncherFontSettings
 import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
+import app.cclauncher.loadFontFamily
 import app.cclauncher.helper.showToast
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.BackHandler
@@ -68,17 +70,34 @@ fun FolderOverlay(
     onMoveApp: (FolderApp, Int, Int) -> Unit,
     onRemoveApp: (FolderApp) -> Unit,
     onResizeApp: (FolderApp, Int, Int) -> Unit,
+    onAppRename: (FolderApp, String) -> Unit = { _, _ -> },
     onAppTextSizeChange: (FolderApp, Float) -> Unit = { _, _ -> },
     onAppLabelAlignmentChange: (FolderApp, Int) -> Unit = { _, _ -> },
     onAppIconPlacementChange: (FolderApp, Int) -> Unit = { _, _ -> },
+    onAppSelectFont: (FolderApp) -> Unit = {},
+    onAppResetFont: (FolderApp) -> Unit = {},
 ) {
     val context = LocalContext.current
     var movingApp by remember { mutableStateOf<FolderApp?>(null) }
     var appContextMenu by remember { mutableStateOf<FolderApp?>(null) }
+    var appCustomizeMenu by remember { mutableStateOf<FolderApp?>(null) }
+    var appFontMenu by remember { mutableStateOf<FolderApp?>(null) }
+    var appRenameMenu by remember { mutableStateOf<FolderApp?>(null) }
+    var appRenameValue by remember { mutableStateOf("") }
     var resizingApp by remember { mutableStateOf<FolderApp?>(null) }
     var textSizingApp by remember { mutableStateOf<FolderApp?>(null) }
     var alignmentApp by remember { mutableStateOf<FolderApp?>(null) }
     var iconPlacementApp by remember { mutableStateOf<FolderApp?>(null) }
+    val launcherFontSettings = LocalLauncherFontSettings.current
+    val folderTitleFontFamily = remember(launcherFontSettings, folder.titleFontPath) {
+        if (!launcherFontSettings.customFontsEnabled) {
+            null
+        } else {
+            loadFontFamily(folder.titleFontPath)
+                ?: loadFontFamily(launcherFontSettings.folderDefaultFontPath)
+                ?: loadFontFamily(launcherFontSettings.mainFontPath)
+        }
+    }
 
     BackHandler { onDismiss() }
 
@@ -123,7 +142,10 @@ fun FolderOverlay(
                         if (!folder.hideTitle) {
                             Text(
                                 text = folder.title,
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Medium),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = folderTitleFontFamily,
+                                ),
                                 color = when {
                                     folder.titleTextColor != 0 -> Color(folder.titleTextColor)
                                     settings.useCustomTextColor && settings.textColor != 0 -> Color(settings.textColor)
@@ -221,19 +243,17 @@ fun FolderOverlay(
                             onClick = { resizingApp = app; appContextMenu = null }
                         )
                         DropdownMenuItem(
-                            text = { Text("Text Size") },
-                            onClick = { textSizingApp = app; appContextMenu = null }
+                            text = { Text("Customize...") },
+                            onClick = { appCustomizeMenu = app; appContextMenu = null }
                         )
                         DropdownMenuItem(
-                            text = { Text("Label Alignment") },
-                            onClick = { alignmentApp = app; appContextMenu = null }
+                            text = { Text("Rename") },
+                            onClick = {
+                                appRenameValue = app.appLabel
+                                appRenameMenu = app
+                                appContextMenu = null
+                            }
                         )
-                        if (app.isSystemShortcut && settings.showShortcutIcon) {
-                            DropdownMenuItem(
-                                text = { Text("Change Icon Placement") },
-                                onClick = { iconPlacementApp = app; appContextMenu = null }
-                            )
-                        }
                         DropdownMenuItem(
                             text = { Text("Remove from Folder") },
                             onClick = { onRemoveApp(app); appContextMenu = null }
@@ -242,6 +262,102 @@ fun FolderOverlay(
                 },
                 confirmButton = {
                     TextButton(onClick = { appContextMenu = null }) { Text("Close") }
+                }
+            )
+        }
+
+        appCustomizeMenu?.let { app ->
+            AlertDialog(
+                onDismissRequest = { appCustomizeMenu = null },
+                title = { Text("Customize ${app.appLabel}") },
+                text = {
+                    Column {
+                        DropdownMenuItem(
+                            text = { Text("Text Size...") },
+                            onClick = {
+                                textSizingApp = app
+                                appCustomizeMenu = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Label Alignment...") },
+                            onClick = {
+                                alignmentApp = app
+                                appCustomizeMenu = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Select Font...") },
+                            onClick = {
+                                appFontMenu = app
+                                appCustomizeMenu = null
+                            }
+                        )
+                        if (app.isSystemShortcut && settings.showShortcutIcon) {
+                            DropdownMenuItem(
+                                text = { Text("Change Icon Placement...") },
+                                onClick = {
+                                    iconPlacementApp = app
+                                    appCustomizeMenu = null
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { appCustomizeMenu = null }) { Text("Close") }
+                }
+            )
+        }
+
+        appFontMenu?.let { app ->
+            AlertDialog(
+                onDismissRequest = { appFontMenu = null },
+                title = { Text("Select Font") },
+                text = {
+                    Column {
+                        DropdownMenuItem(
+                            text = { Text("Select Font...") },
+                            onClick = {
+                                onAppSelectFont(app)
+                                appFontMenu = null
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Default Font") },
+                            onClick = {
+                                onAppResetFont(app)
+                                appFontMenu = null
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { appFontMenu = null }) { Text("Close") }
+                }
+            )
+        }
+
+        appRenameMenu?.let { app ->
+            AlertDialog(
+                onDismissRequest = { appRenameMenu = null },
+                title = { Text("Rename ${app.appLabel}") },
+                text = {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = appRenameValue,
+                        onValueChange = { appRenameValue = it },
+                        singleLine = true,
+                        label = { Text("New name") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onAppRename(app, appRenameValue)
+                        appRenameMenu = null
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { appRenameMenu = null }) { Text("Cancel") }
                 }
             )
         }
@@ -392,6 +508,7 @@ private fun FolderGridContent(
                     settings = settings,
                     appTextSizeScale = appTextSizeScale,
                     folderTextColor = folder.titleTextColor,
+                    folderDefaultAppFontPath = folder.defaultAppFontPath,
                     modifier = itemMod,
                 )
             }
@@ -427,6 +544,7 @@ private fun HomeFolderAppItem(
     settings: AppSettings,
     appTextSizeScale: Float = 1.0f,
     folderTextColor: Int = 0,
+    folderDefaultAppFontPath: String = "",
     modifier: Modifier = Modifier,
 ) {
     val textColor = when {
@@ -455,6 +573,17 @@ private fun HomeFolderAppItem(
     }
     val showShortcutIcon = folderApp.isSystemShortcut && settings.showShortcutIcon
     val showShortcutIconOnRight = folderApp.iconPlacement == Constants.IconPlacement.RIGHT
+    val launcherFontSettings = LocalLauncherFontSettings.current
+    val labelFontFamily = remember(launcherFontSettings, folderApp.labelFontPath, folderDefaultAppFontPath) {
+        if (!launcherFontSettings.customFontsEnabled) {
+            null
+        } else {
+            loadFontFamily(folderApp.labelFontPath)
+                ?: loadFontFamily(folderDefaultAppFontPath)
+                ?: loadFontFamily(launcherFontSettings.folderDefaultFontPath)
+                ?: loadFontFamily(launcherFontSettings.mainFontPath)
+        }
+    }
 
     if (showShortcutIcon) {
         Row(
@@ -477,6 +606,7 @@ private fun HomeFolderAppItem(
                 text = folderApp.appLabel,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = effectiveFontSize,
+                    fontFamily = labelFontFamily,
                     fontWeight = fontWeight,
                 ),
                 color = textColor,
@@ -498,6 +628,7 @@ private fun HomeFolderAppItem(
             text = folderApp.appLabel,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = effectiveFontSize,
+                fontFamily = labelFontFamily,
                 fontWeight = fontWeight,
             ),
             color = textColor,

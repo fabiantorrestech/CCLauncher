@@ -21,6 +21,7 @@ sealed class HomeItem {
         val appTextSize: Float = 1.0f,
         val appLabelAlignment: Int = -1,
         val iconPlacement: Int = Constants.IconPlacement.LEFT,
+        val labelFontPath: String = "",
         override val id: String = appModel.getKey(),
         override val page: Int = 0,
         override val row: Int,
@@ -55,6 +56,8 @@ sealed class HomeItem {
         val titleTextColor: Int = 0,
         val titleLabelAlignment: Int = -1,
         val iconPlacement: Int = Constants.IconPlacement.LEFT,
+        val titleFontPath: String = "",
+        val defaultAppFontPath: String = "",
         /** When false the folder tile is hidden from the home grid but can still be opened via gestures/dots. */
         val showOnHome: Boolean = true,
         /** Hide the folder name text in the overlay header. */
@@ -91,6 +94,7 @@ data class FolderApp(
     val appTextSize: Float = 1.0f,
     val appLabelAlignment: Int = -1,
     val iconPlacement: Int = Constants.IconPlacement.LEFT,
+    val labelFontPath: String = "",
 ) {
     fun toAppModel() = AppModel(
         appLabel = appLabel,
@@ -107,6 +111,7 @@ fun AppModel.toFolderApp(
     row: Int,
     column: Int,
     iconPlacement: Int = Constants.IconPlacement.LEFT,
+    labelFontPath: String = "",
 ) = FolderApp(
     appLabel = appLabel,
     appPackage = appPackage,
@@ -118,6 +123,7 @@ fun AppModel.toFolderApp(
     systemShortcutId = systemShortcutId,
     systemShortcutPackage = systemShortcutPackage,
     iconPlacement = iconPlacement,
+    labelFontPath = labelFontPath,
 )
 
 @Serializable

@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
+import app.cclauncher.loadFontFamily
+import app.cclauncher.LocalLauncherFontSettings
 import app.cclauncher.settings.AppSettings
 
 @Composable
@@ -74,6 +76,16 @@ fun HomeFolderItem(
         else -> Arrangement.Start
     }
     val showFolderIconOnRight = folder.iconPlacement == Constants.IconPlacement.RIGHT
+    val launcherFontSettings = LocalLauncherFontSettings.current
+    val labelFontFamily = remember(launcherFontSettings, folder.titleFontPath) {
+        if (!launcherFontSettings.customFontsEnabled) {
+            null
+        } else {
+            loadFontFamily(folder.titleFontPath)
+                ?: loadFontFamily(launcherFontSettings.folderDefaultFontPath)
+                ?: loadFontFamily(launcherFontSettings.mainFontPath)
+        }
+    }
 
     Column(
         modifier = modifier
@@ -107,6 +119,7 @@ fun HomeFolderItem(
                     text = folder.title,
                     style = MaterialTheme.typography.bodyMedium.copy(
                         fontSize = effectiveFontSize,
+                        fontFamily = labelFontFamily,
                         fontWeight = fontWeight,
                     ),
                     color = textColor,
@@ -128,6 +141,7 @@ fun HomeFolderItem(
                 text = folder.title,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontSize = effectiveFontSize,
+                    fontFamily = labelFontFamily,
                     fontWeight = fontWeight,
                 ),
                 color = textColor,

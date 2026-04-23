@@ -48,20 +48,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val customFontInfo: StateFlow<Pair<String, Long>?> = settingsRepository.settings
         .map { settings ->
             val path = settings.customFontPath
-            if (path.isNotEmpty()) {
-                try {
-                    val file = File(path)
-                    if (file.exists()) {
-                        Pair(file.name, file.length())
-                    } else {
-                        null
-                    }
-                } catch (_: Exception) {
-                    null
-                }
-            } else {
-                null
-            }
+            readFontInfo(path)
         }
         .stateIn(
             scope = viewModelScope,
@@ -88,6 +75,30 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun clearCustomFont() {
         viewModelScope.launch {
             settingsRepository.clearCustomFont()
+        }
+    }
+
+    fun setFontForField(fieldName: String, uri: Uri) {
+        viewModelScope.launch {
+            settingsRepository.setFontForSetting(fieldName, uri)
+        }
+    }
+
+    fun clearFontForField(fieldName: String) {
+        viewModelScope.launch {
+            settingsRepository.clearFontForSetting(fieldName)
+        }
+    }
+
+    fun getFontInfo(path: String): Pair<String, Long>? = readFontInfo(path)
+
+    private fun readFontInfo(path: String): Pair<String, Long>? {
+        if (path.isEmpty()) return null
+        return try {
+            val file = File(path)
+            if (file.exists()) Pair(file.name, file.length()) else null
+        } catch (_: Exception) {
+            null
         }
     }
 

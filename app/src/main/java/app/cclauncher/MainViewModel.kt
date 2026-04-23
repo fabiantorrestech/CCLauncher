@@ -483,6 +483,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     } else {
                         Constants.IconPlacement.LEFT
                     },
+                    labelFontPath = settings.homeLabelFontPath,
                     page = page,
                     row = nextPos.first,
                     column = nextPos.second
@@ -575,6 +576,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 val folder = HomeItem.Folder(
                     title = title.ifBlank { "Folder" },
                     iconPlacement = settings.folderIconPlacement,
+                    titleFontPath = settings.folderLabelFontPath,
                     page = page,
                     row = nextPos.first,
                     column = nextPos.second,
@@ -611,6 +613,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 } else {
                     Constants.IconPlacement.LEFT
                 },
+                labelFontPath = "",
             )
             val updatedFolder = folder.copy(apps = folder.apps + folderApp)
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
@@ -875,6 +878,15 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun updateHomeAppLabelFont(appItem: HomeItem.App, labelFontPath: String) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val updatedApp = appItem.copy(labelFontPath = labelFontPath)
+            val updatedItems = currentLayout.items.map { if (it.id == appItem.id) updatedApp else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun updateFolderTitleLabelAlignment(folderId: String, alignment: Int) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value
@@ -890,6 +902,26 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val currentLayout = _homeLayoutState.value
             val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
             val updatedFolder = folder.copy(iconPlacement = placement)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderTitleFont(folderId: String, titleFontPath: String) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(titleFontPath = titleFontPath)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderDefaultAppFont(folderId: String, defaultAppFontPath: String) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(defaultAppFontPath = defaultAppFontPath)
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
         }
@@ -911,6 +943,17 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val currentLayout = _homeLayoutState.value
             val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
             val updatedApp = folderApp.copy(iconPlacement = placement)
+            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderAppLabelFont(folderId: String, folderApp: FolderApp, labelFontPath: String) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedApp = folderApp.copy(labelFontPath = labelFontPath)
             val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
@@ -1289,7 +1332,52 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             }
             settingsRepository.migrateAppKeys(migrations)
 
+            val targetLabel = if (shouldClear) defaultLabel ?: app.appLabel else trimmedName
+            syncAppLabelAcrossHomeLayout(app, targetLabel)
             loadApps()
+        }
+    }
+
+    private suspend fun syncAppLabelAcrossHomeLayout(app: AppModel, targetLabel: String) {
+        val targetKey = app.getKey()
+        val currentLayout = _homeLayoutState.value
+        var changed = false
+
+        val updatedItems = currentLayout.items.map { item ->
+            when (item) {
+                is HomeItem.App -> {
+                    if (item.appModel.getKey() == targetKey && item.appModel.appLabel != targetLabel) {
+                        changed = true
+                        item.copy(appModel = item.appModel.copy(appLabel = targetLabel))
+                    } else {
+                        item
+                    }
+                }
+                is HomeItem.Folder -> {
+                    var folderChanged = false
+                    val updatedApps = item.apps.map { folderApp ->
+                        if (folderApp.toAppModel().getKey() == targetKey && folderApp.appLabel != targetLabel) {
+                            folderChanged = true
+                            folderApp.copy(appLabel = targetLabel)
+                        } else {
+                            folderApp
+                        }
+                    }
+                    if (folderChanged) {
+                        changed = true
+                        item.copy(apps = updatedApps)
+                    } else {
+                        item
+                    }
+                }
+                is HomeItem.Widget -> item
+            }
+        }
+
+        if (changed) {
+            val updatedLayout = currentLayout.copy(items = updatedItems)
+            _homeLayoutState.value = updatedLayout
+            settingsRepository.saveHomeLayout(updatedLayout)
         }
     }
 

@@ -1,5 +1,8 @@
 package app.cclauncher.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +57,8 @@ import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ColorPickerDialog
+import kotlinx.coroutines.launch
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,6 +87,23 @@ fun FolderDetailScreen(
     var appPickerSearch by remember { mutableStateOf("") }
     var showColorPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val pickDefaultFontLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent(),
+        onResult = { uri: Uri? ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            coroutineScope.launch {
+                val newPath = viewModel.settingsRepository.importFontFile(uri, "folder_default_font")
+                if (newPath != null) {
+                    if (folder.defaultAppFontPath.isNotBlank()) {
+                        viewModel.settingsRepository.deleteFontFile(folder.defaultAppFontPath)
+                    }
+                    viewModel.updateFolderDefaultAppFont(folderId, newPath)
+                }
+            }
+        }
+    )
 
     Scaffold(
         topBar = {
@@ -274,6 +297,36 @@ fun FolderDetailScreen(
                     steps = 29,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
+                Text("Folder App Font (Default)", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (folder.defaultAppFontPath.isBlank()) {
+                        "Uses folder/home/global fallback"
+                    } else {
+                        File(folder.defaultAppFontPath).name
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { pickDefaultFontLauncher.launch("font/*") }) {
+                        Text("Select Font")
+                    }
+                    if (folder.defaultAppFontPath.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                viewModel.settingsRepository.deleteFontFile(folder.defaultAppFontPath)
+                                viewModel.updateFolderDefaultAppFont(folderId, "")
+                            }
+                        ) {
+                            Text("Use Fallback")
+                        }
+                    }
+                }
                 Spacer(Modifier.height(16.dp))
             }
 
