@@ -3,7 +3,6 @@ package app.cclauncher.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
@@ -28,7 +27,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -114,20 +112,261 @@ import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.reflect.KClass
 
 /**
- * Represents each tab in the settings screen.
- * Schema-driven categories use [SchemaCategory]; manual sections each get their own subclass.
+ * Defines the settings screen information architecture.
  */
-private sealed class SettingsTab(val title: String) {
-    data class SchemaCategory(val category: KClass<*>, val label: String) : SettingsTab(label)
-    data object Widgets : SettingsTab("Widgets")
-    data object Folders : SettingsTab("Folders")
-    data object PrivateSpace : SettingsTab("Private Space")
-    data object System : SettingsTab("System")
-    data object Backup : SettingsTab("Backup")
+private data class SettingsTab(val title: String, val sections: List<SettingsSectionSpec>)
+
+private data class SettingsSectionSpec(
+    val title: String,
+    val entries: List<SettingsSectionEntry>,
+)
+
+private sealed interface SettingsSectionEntry {
+    data class Field(val name: String) : SettingsSectionEntry
+    data class Manual(val key: String) : SettingsSectionEntry
 }
+
+private fun field(name: String) = SettingsSectionEntry.Field(name)
+private fun manual(key: String) = SettingsSectionEntry.Manual(key)
+
+private const val MANUAL_ADD_WIDGET = "add_widget"
+private const val MANUAL_MANAGE_FOLDERS = "manage_folders"
+private const val MANUAL_CORNER_ZONES = "corner_zones"
+private const val MANUAL_PRIVATE_SPACE = "private_space"
+private const val MANUAL_DEFAULT_LAUNCHER = "default_launcher"
+private const val MANUAL_LOCK_SETTINGS = "lock_settings"
+private const val MANUAL_HIDDEN_APPS = "hidden_apps"
+private const val MANUAL_APP_INFO = "app_info"
+private const val MANUAL_ABOUT = "about"
+private const val MANUAL_EXPORT_SETTINGS = "export_settings"
+private const val MANUAL_IMPORT_SETTINGS = "import_settings"
+
+private val settingsTabs = listOf(
+    SettingsTab(
+        title = "Home",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "Grid & Pages",
+                entries = listOf(
+                    field("homeScreenRows"),
+                    field("homeScreenColumns"),
+                    field("homeScreenPages"),
+                    field("showPageIndicator"),
+                    field("showMoveGridOverlay"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Icons & Labels",
+                entries = listOf(
+                    field("scaleHomeApps"),
+                    field("showHomeScreenIcons"),
+                    field("showIconsInPortrait"),
+                    field("showIconsInLandscape"),
+                    field("textSizeScale"),
+                    field("homeLabelFontPath"),
+                    field("appLabelAlignment"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Shortcuts & PWAs",
+                entries = listOf(
+                    field("showShortcutIcon"),
+                    field("shortcutIconPlacement"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Widgets",
+                entries = listOf(manual(MANUAL_ADD_WIDGET)),
+            ),
+        ),
+    ),
+    SettingsTab(
+        title = "App Drawer",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "Launch & Search",
+                entries = listOf(
+                    field("defaultScreen"),
+                    field("autoShowKeyboard"),
+                    field("autoOpenFilteredApp"),
+                    field("returnToHomeAfterApp"),
+                    field("appDrawerTapToOpen"),
+                    field("appDrawerLongPressEnabled"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Search Matching",
+                entries = listOf(
+                    field("searchType"),
+                    field("searchSortOrder"),
+                    field("searchAliasesMode"),
+                    field("showHiddenAppsOnSearch"),
+                    field("showWebSearchOption"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "List Layout",
+                entries = listOf(
+                    field("showAppNames"),
+                    field("showAppNamesInSearchAfter"),
+                    field("searchBarPlacement"),
+                    field("invertSearchResultsOrder"),
+                    field("reverseAppListDirection"),
+                    field("avoidCameraBottomSearch"),
+                    field("showScrollbar"),
+                    field("scrollbarOnLeft"),
+                    field("appDrawerAlignment"),
+                    field("itemSpacing"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Shortcuts & Typography",
+                entries = listOf(
+                    field("showPinnedShortcuts"),
+                    field("appDrawerLabelFontPath"),
+                    field("searchResultsUseHomeFont"),
+                    field("searchResultsFontSize"),
+                ),
+            ),
+        ),
+    ),
+    SettingsTab(
+        title = "Appearance",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "Theme & Display",
+                entries = listOf(
+                    field("appTheme"),
+                    field("useDynamicTheme"),
+                    field("screenOrientation"),
+                    field("statusBar"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Fonts",
+                entries = listOf(
+                    field("fontWeight"),
+                    field("useSystemFont"),
+                    field("customFontPath"),
+                    field("headerFontPath"),
+                    field("tertiaryFontPath"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Colors & Icons",
+                entries = listOf(
+                    field("useCustomTextColor"),
+                    field("textColor"),
+                    field("iconCornerRadius"),
+                    field("selectedIconPack"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Wallpaper",
+                entries = listOf(
+                    field("plainWallpaper"),
+                    field("autoUpdateWallpaper"),
+                ),
+            ),
+        ),
+    ),
+    SettingsTab(
+        title = "Gestures",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "General",
+                entries = listOf(
+                    field("gestureSensitivity"),
+                    field("doubleTapToLock"),
+                    field("swipeGesturesInFolders"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Swipe Down",
+                entries = listOf(
+                    field("swipeDownAction"),
+                    field("swipeDownApp"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Swipe Up",
+                entries = listOf(
+                    field("swipeUpAction"),
+                    field("swipeUpApp"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Swipe Left",
+                entries = listOf(
+                    field("swipeLeftAction"),
+                    field("swipeLeftApp"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Swipe Right",
+                entries = listOf(
+                    field("swipeRightAction"),
+                    field("swipeRightApp"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Corner Zones",
+                entries = listOf(manual(MANUAL_CORNER_ZONES)),
+            ),
+        ),
+    ),
+    SettingsTab(
+        title = "Folders",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "Folder Defaults",
+                entries = listOf(
+                    field("showFolderIcon"),
+                    field("folderIconPlacement"),
+                    field("folderLabelFontPath"),
+                    field("folderBackgroundOpacity"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Manage Folders",
+                entries = listOf(manual(MANUAL_MANAGE_FOLDERS)),
+            ),
+        ),
+    ),
+    SettingsTab(
+        title = "System",
+        sections = listOf(
+            SettingsSectionSpec(
+                title = "Launcher Access",
+                entries = listOf(
+                    manual(MANUAL_DEFAULT_LAUNCHER),
+                    manual(MANUAL_PRIVATE_SPACE),
+                    manual(MANUAL_HIDDEN_APPS),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Security",
+                entries = listOf(manual(MANUAL_LOCK_SETTINGS)),
+            ),
+            SettingsSectionSpec(
+                title = "Backup & Restore",
+                entries = listOf(
+                    manual(MANUAL_EXPORT_SETTINGS),
+                    manual(MANUAL_IMPORT_SETTINGS),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "About",
+                entries = listOf(
+                    manual(MANUAL_ABOUT),
+                    manual(MANUAL_APP_INFO),
+                ),
+            ),
+        ),
+    ),
+)
 
 /**
  * A manually-defined (non-schema) item that should appear in search results.
@@ -178,9 +417,6 @@ fun SettingsScreen(
 
     var showPageWarningDialog by remember { mutableStateOf(false) }
     var pendingPageChange by remember { mutableStateOf<Int?>(null) }
-
-    var showCreateFolderDialog by remember { mutableStateOf(false) }
-    var newFolderName by remember { mutableStateOf("") }
 
     val homeLayoutState by mainViewModel.homeLayoutState.collectAsState()
     val allFolders = remember(homeLayoutState.items) {
@@ -238,7 +474,6 @@ fun SettingsScreen(
     val effectiveLockState by viewModel.effectiveLockState.collectAsState()
     val showLockDialog by viewModel.showLockDialog.collectAsState()
     val isSettingPin by viewModel.isSettingPin.collectAsState()
-    val refreshTrigger by mainViewModel.refreshTrigger.collectAsState()
 
     // Search state
     var isSearchActive by remember { mutableStateOf(false) }
@@ -256,90 +491,112 @@ fun SettingsScreen(
         }
     })
 
-    // Build ordered list of tabs — schema categories (excluding Folders) + manual sections
     val grouped = remember(uiState) { schema.groupedByCategory() }
-    val tabs = remember(uiState) {
-        val list = mutableListOf<SettingsTab>()
-        for (category in schema.orderedCategories()) {
-            val fields = grouped[category].orEmpty()
-            if (fields.isEmpty()) continue
-            if (category.simpleName == "Folders") continue
-            val label = (category.simpleName ?: "Settings")
-                .lowercase()
-                .capitalize(Locale.getDefault())
-            list.add(SettingsTab.SchemaCategory(category, label))
-        }
-        list.add(SettingsTab.Widgets)
-        list.add(SettingsTab.Folders)
-        list.add(SettingsTab.PrivateSpace)
-        list.add(SettingsTab.System)
-        list.add(SettingsTab.Backup)
-        list
+    val allFields = remember(uiState) {
+        schema.orderedCategories().flatMap { grouped[it].orEmpty() }
     }
-
-    val pagerState = rememberPagerState(pageCount = { tabs.size })
-
-    // Build a flat searchable list: pairs of (field, categoryLabel) for schema fields
-    val searchableFields = remember(uiState) {
-        val result = mutableListOf<Pair<SettingField<AppSettings, *>, String>>()
-        for (category in schema.orderedCategories()) {
-            val fields = grouped[category].orEmpty()
-            val label = (category.simpleName ?: "Settings")
-                .lowercase()
-                .capitalize(Locale.getDefault())
-            for (field in fields) {
-                if (field.meta != null) result.add(field to label)
+    val fieldsByName = remember(allFields) { allFields.associateBy { it.name } }
+    val fieldCategories = remember {
+        buildMap {
+            settingsTabs.forEach { tab ->
+                tab.sections.forEach { section ->
+                    section.entries.forEach { entry ->
+                        if (entry is SettingsSectionEntry.Field) {
+                            put(entry.name, tab.title)
+                        }
+                    }
+                }
             }
         }
-        result
+    }
+    val manualCategories = remember {
+        buildMap {
+            settingsTabs.forEach { tab ->
+                tab.sections.forEach { section ->
+                    section.entries.forEach { entry ->
+                        if (entry is SettingsSectionEntry.Manual) {
+                            put(entry.key, tab.title)
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    // Manual (non-schema) items that also need to be discoverable via search.
-    // Lambdas here only capture stable references (coroutineScope, viewModel, MutableState setters).
-    val manualSearchItems = remember {
+    val pagerState = rememberPagerState(pageCount = { settingsTabs.size })
+
+    val searchableFields = remember(allFields) {
+        allFields.mapNotNull { field ->
+            field.meta?.let {
+                field to (fieldCategories[field.name] ?: "Other")
+            }
+        }
+    }
+
+    val manualSearchItems = remember(uiState.lockSettings) {
         listOf(
             ManualSearchItem(
-                key = "add_widget",
+                key = MANUAL_ADD_WIDGET,
                 title = "Add Widget",
                 description = "Add a widget to your home screen",
-                category = "Widgets",
+                category = manualCategories.getValue(MANUAL_ADD_WIDGET),
                 onClick = { coroutineScope.launch { viewModel.emitEvent(UiEvent.NavigateToWidgetPicker) } }
             ),
             ManualSearchItem(
-                key = "manage_folders",
+                key = MANUAL_MANAGE_FOLDERS,
                 title = "Manage Folders",
                 description = "View and configure existing folders",
-                category = "Folders",
-                onClick = onNavigateToFolderList
+                category = manualCategories.getValue(MANUAL_MANAGE_FOLDERS),
+                onClick = onNavigateToFolderList,
             ),
             ManualSearchItem(
-                key = "private_space",
+                key = MANUAL_CORNER_ZONES,
+                title = "Configure Corner Zones",
+                description = "Set up tap and hold shortcut zones in the home screen corners",
+                category = manualCategories.getValue(MANUAL_CORNER_ZONES),
+                onClick = onNavigateToCornerDotSettings,
+            ),
+            ManualSearchItem(
+                key = MANUAL_PRIVATE_SPACE,
                 title = "Private Space",
                 description = "Set up or manage Android Private Space",
-                category = "Private Space",
-                onClick = { mainViewModel.openPrivateSpaceSettings() }
+                category = manualCategories.getValue(MANUAL_PRIVATE_SPACE),
+                onClick = { mainViewModel.openPrivateSpaceSettings() },
             ),
             ManualSearchItem(
-                key = "default_launcher",
+                key = MANUAL_DEFAULT_LAUNCHER,
                 title = "Set as Default Launcher",
                 description = "Set CCLauncher as your default launcher app",
-                category = "System",
+                category = manualCategories.getValue(MANUAL_DEFAULT_LAUNCHER),
                 onClick = {
                     context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
-                }
+                },
             ),
             ManualSearchItem(
-                key = "hidden_apps",
+                key = MANUAL_LOCK_SETTINGS,
+                title = "Lock Settings",
+                description = "Require a PIN before settings can be changed",
+                category = manualCategories.getValue(MANUAL_LOCK_SETTINGS),
+                onClick = {
+                    if (uiState.lockSettings) {
+                        viewModel.toggleLockSettings(false)
+                    } else {
+                        viewModel.setShowLockDialog(true, true)
+                    }
+                },
+            ),
+            ManualSearchItem(
+                key = MANUAL_HIDDEN_APPS,
                 title = "Hidden Apps",
                 description = "Manage apps hidden from the app drawer",
-                category = "System",
-                onClick = onNavigateToHiddenApps
+                category = manualCategories.getValue(MANUAL_HIDDEN_APPS),
+                onClick = onNavigateToHiddenApps,
             ),
             ManualSearchItem(
-                key = "app_info",
+                key = MANUAL_APP_INFO,
                 title = "App Info",
                 description = "Open CCLauncher's system app info page",
-                category = "System",
+                category = manualCategories.getValue(MANUAL_APP_INFO),
                 onClick = {
                     context.startActivity(
                         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -347,33 +604,33 @@ fun SettingsScreen(
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                     )
-                }
+                },
             ),
             ManualSearchItem(
-                key = "about",
+                key = MANUAL_ABOUT,
                 title = "About CCLauncher",
                 description = "Version info and links",
-                category = "System",
+                category = manualCategories.getValue(MANUAL_ABOUT),
                 onClick = {
                     coroutineScope.launch { viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT)) }
-                }
+                },
             ),
             ManualSearchItem(
-                key = "export_settings",
+                key = MANUAL_EXPORT_SETTINGS,
                 title = "Export Settings",
                 description = "Save your settings to a backup file",
-                category = "Backup",
+                category = manualCategories.getValue(MANUAL_EXPORT_SETTINGS),
                 onClick = {
                     val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                     exportLauncher.launch("cclauncher_settings_$timestamp.json")
-                }
+                },
             ),
             ManualSearchItem(
-                key = "import_settings",
+                key = MANUAL_IMPORT_SETTINGS,
                 title = "Import Settings",
                 description = "Restore settings from a backup file",
-                category = "Backup",
-                onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+                category = manualCategories.getValue(MANUAL_IMPORT_SETTINGS),
+                onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) },
             ),
         )
     }
@@ -864,7 +1121,7 @@ fun SettingsScreen(
                     contentColor = MaterialTheme.colorScheme.primary,
                     divider = {},
                 ) {
-                    tabs.forEachIndexed { index, tab ->
+                    settingsTabs.forEachIndexed { index, tab ->
                         Tab(
                             selected = pagerState.currentPage == index,
                             onClick = {
@@ -885,247 +1142,50 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxSize(),
                     beyondViewportPageCount = 0,
                 ) { pageIndex ->
-                    val tab = tabs[pageIndex]
+                    val tab = settingsTabs[pageIndex]
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        when (tab) {
-                            is SettingsTab.SchemaCategory -> {
-                                val categoryFields = grouped[tab.category].orEmpty()
-                                item(key = "cat_${tab.title}") {
-                                    SettingsSection(title = tab.title) {
-                                        categoryFields.forEach { field ->
-                                            // Sub-header before the swipe-direction group
-                                            if (tab.category == app.cclauncher.settings.Gestures::class &&
-                                                field.name == "gestureSensitivity") {
-                                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                                Text(
-                                                    "Swipe Gestures",
-                                                    style = MaterialTheme.typography.labelMedium,
-                                                    color = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
-                                                )
+                        tab.sections.forEach { section ->
+                            item(key = "${tab.title}_${section.title}") {
+                                SettingsSection(title = section.title) {
+                                    section.entries.forEach { entry ->
+                                        when (entry) {
+                                            is SettingsSectionEntry.Field -> {
+                                                fieldsByName[entry.name]?.let { field ->
+                                                    SettingsFieldRenderer(
+                                                        field = field,
+                                                        uiState = uiState,
+                                                        schema = schema,
+                                                        coroutineScope = coroutineScope,
+                                                        viewModel = viewModel,
+                                                        context = context,
+                                                        onShowDialog = onFieldAction,
+                                                        onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                                    )
+                                                    SwipeFolderSettingRenderer(
+                                                        fieldName = field.name,
+                                                        uiState = uiState,
+                                                        allFolders = allFolders,
+                                                        onOpenFolderPicker = { swipeFolderPickerFor = it },
+                                                    )
+                                                }
                                             }
-                                            key(field.name) {
-                                                SettingsFieldRenderer(
-                                                    field = field,
+
+                                            is SettingsSectionEntry.Manual -> {
+                                                ManualSettingsEntryRenderer(
+                                                    key = entry.key,
                                                     uiState = uiState,
-                                                    schema = schema,
-                                                    coroutineScope = coroutineScope,
-                                                    viewModel = viewModel,
                                                     context = context,
-                                                    onShowDialog = onFieldAction,
-                                                    onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
-                                                )
-                                            }
-                                            // Inline folder picker row for swipe-action Open Folder
-                                            if (tab.category == app.cclauncher.settings.Gestures::class) {
-                                                when (field.name) {
-                                                    "swipeDownAction" -> if (uiState.swipeDownAction == Constants.SwipeAction.OPEN_FOLDER) {
-                                                        SettingsItem(
-                                                            title = "Swipe Down Folder",
-                                                            subtitle = allFolders.find { it.id == uiState.swipeDownFolderId }?.title
-                                                                ?: "Not set",
-                                                            modifier = Modifier.padding(start = 24.dp),
-                                                            onClick = { swipeFolderPickerFor = "down" },
-                                                        )
-                                                    }
-                                                    "swipeUpAction" -> if (uiState.swipeUpAction == Constants.SwipeAction.OPEN_FOLDER) {
-                                                        SettingsItem(
-                                                            title = "Swipe Up Folder",
-                                                            subtitle = allFolders.find { it.id == uiState.swipeUpFolderId }?.title
-                                                                ?: "Not set",
-                                                            modifier = Modifier.padding(start = 24.dp),
-                                                            onClick = { swipeFolderPickerFor = "up" },
-                                                        )
-                                                    }
-                                                    "swipeLeftAction" -> if (uiState.swipeLeftAction == Constants.SwipeAction.OPEN_FOLDER) {
-                                                        SettingsItem(
-                                                            title = "Swipe Left Folder",
-                                                            subtitle = allFolders.find { it.id == uiState.swipeLeftFolderId }?.title
-                                                                ?: "Not set",
-                                                            modifier = Modifier.padding(start = 24.dp),
-                                                            onClick = { swipeFolderPickerFor = "left" },
-                                                        )
-                                                    }
-                                                    "swipeRightAction" -> if (uiState.swipeRightAction == Constants.SwipeAction.OPEN_FOLDER) {
-                                                        SettingsItem(
-                                                            title = "Swipe Right Folder",
-                                                            subtitle = allFolders.find { it.id == uiState.swipeRightFolderId }?.title
-                                                                ?: "Not set",
-                                                            modifier = Modifier.padding(start = 24.dp),
-                                                            onClick = { swipeFolderPickerFor = "right" },
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        // Corner zones section at the end of Gestures tab
-                                        if (tab.category == app.cclauncher.settings.Gestures::class) {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                            Text(
-                                                "Corner Zones",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
-                                            )
-                                            SettingsAction(
-                                                title = "Configure Corner Zones",
-                                                description = "Set up tap & hold shortcut zones in the home screen corners",
-                                                onClick = onNavigateToCornerDotSettings,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            SettingsTab.Widgets -> {
-                                item(key = "widgets") {
-                                    SettingsSection(title = "Widgets") {
-                                        SettingsAction(
-                                            title = "Add Widget",
-                                            description = "Add a widget to your home screen",
-                                            onClick = {
-                                                coroutineScope.launch {
-                                                    viewModel.emitEvent(UiEvent.NavigateToWidgetPicker)
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsTab.Folders -> {
-                                val folderFields = grouped.entries
-                                    .find { it.key.simpleName == "Folders" }?.value.orEmpty()
-                                item(key = "folders") {
-                                    SettingsSection(title = "Folders") {
-                                        folderFields.forEach { field ->
-                                            key(field.name) {
-                                                SettingsFieldRenderer(
-                                                    field = field,
-                                                    uiState = uiState,
-                                                    schema = schema,
-                                                    coroutineScope = coroutineScope,
+                                                    mainViewModel = mainViewModel,
                                                     viewModel = viewModel,
-                                                    context = context,
-                                                    onShowDialog = onFieldAction,
-                                                    onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                                    coroutineScope = coroutineScope,
+                                                    onNavigateToHiddenApps = onNavigateToHiddenApps,
+                                                    onNavigateToFolderList = onNavigateToFolderList,
+                                                    onNavigateToCornerDotSettings = onNavigateToCornerDotSettings,
+                                                    exportLauncher = exportLauncher,
+                                                    importLauncher = importLauncher,
                                                 )
                                             }
                                         }
-                                        SettingsAction(
-                                            title = "Manage Folders",
-                                            description = "View and configure existing folders",
-                                            onClick = onNavigateToFolderList
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsTab.PrivateSpace -> {
-                                item(key = "private_space_$refreshTrigger") {
-                                    SettingsSection(title = "Private Space") {
-                                        if (mainViewModel.isPrivateSpaceSupported) {
-                                            val privateSpaceState by mainViewModel.privateSpaceState.collectAsState()
-
-                                            val subtitle = when (privateSpaceState) {
-                                                MainViewModel.PrivateSpaceState.NotSetUp -> "Tap to set up or manage Private Space (needs to be the default launcher)"
-                                                MainViewModel.PrivateSpaceState.Locked -> "Tap to manage Private Space"
-                                                MainViewModel.PrivateSpaceState.Unlocked -> "Tap to manage Private Space"
-                                                else -> ""
-                                            }
-                                            SettingsItem(
-                                                title = "Private Space",
-                                                subtitle = subtitle,
-                                                onClick = { mainViewModel.openPrivateSpaceSettings() }
-                                            )
-                                        } else {
-                                            SettingsItem(
-                                                title = "Private Space",
-                                                subtitle = "Requires Android 15 or higher",
-                                                enabled = false,
-                                                onClick = { },
-                                                transparency = 0.7f
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            SettingsTab.System -> {
-                                item(key = "system") {
-                                    SettingsSection(title = "System") {
-                                        SettingsItem(
-                                            title = "Set as Default Launcher",
-                                            subtitle = if (isClauncherDefault(context)) "CCLauncher is default" else "CCLauncher is not default",
-                                            onClick = {
-                                                val intent = Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                                                context.startActivity(intent)
-                                            },
-                                            transparency = if (isClauncherDefault(context)) 0.7f else 1.0f
-                                        )
-
-                                        SettingsToggle(
-                                            title = "Lock Settings",
-                                            description = "Prevent changes to settings without a PIN",
-                                            isChecked = uiState.lockSettings,
-                                            onCheckedChange = { locked ->
-                                                if (locked) {
-                                                    viewModel.setShowLockDialog(true, true)
-                                                } else {
-                                                    viewModel.toggleLockSettings(false)
-                                                }
-                                            }
-                                        )
-
-                                        SettingsItem(
-                                            title = "Hidden Apps",
-                                            onClick = onNavigateToHiddenApps
-                                        )
-
-                                        SettingsItem(
-                                            title = "App Info",
-                                            onClick = {
-                                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                                    data = Uri.fromParts("package", context.packageName, null)
-                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                                }
-                                                context.startActivity(intent)
-                                            }
-                                        )
-
-                                        SettingsItem(
-                                            title = "About CCLauncher",
-                                            subtitle = "Version ${context.packageManager.getPackageInfo(context.packageName, 0).versionName}",
-                                            onClick = {
-                                                coroutineScope.launch {
-                                                    viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT))
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            SettingsTab.Backup -> {
-                                item(key = "backup") {
-                                    SettingsSection(title = "Backup") {
-                                        SettingsAction(
-                                            title = "Export Settings",
-                                            description = "Save your settings to a file",
-                                            onClick = {
-                                                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
-                                                    .format(Date())
-                                                exportLauncher.launch("cclauncher_settings_$timestamp.json")
-                                            }
-                                        )
-
-                                        SettingsAction(
-                                            title = "Import Settings",
-                                            description = "Restore settings from a backup file",
-                                            onClick = {
-                                                importLauncher.launch(arrayOf("application/json", "*/*"))
-                                            }
-                                        )
                                     }
                                 }
                             }
@@ -1186,30 +1246,6 @@ fun SettingsScreen(
             }
         )
     }
-
-    if (showCreateFolderDialog) {
-        AlertDialog(
-            onDismissRequest = { showCreateFolderDialog = false },
-            title = { Text("New Folder") },
-            text = {
-                OutlinedTextField(
-                    value = newFolderName,
-                    onValueChange = { newFolderName = it },
-                    label = { Text("Folder name") },
-                    singleLine = true,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    mainViewModel.addFolderToHomeScreen(newFolderName.ifBlank { "Folder" })
-                    showCreateFolderDialog = false
-                }) { Text("Create") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateFolderDialog = false }) { Text("Cancel") }
-            }
-        )
-    }
 }
 
 /**
@@ -1266,14 +1302,6 @@ private fun SettingsFieldRenderer(
                                     onShowAccessibilityDisclosure()
                                 } else {
                                     viewModel.updateSetting("doubleTapToLock", false)
-                                }
-                            }
-
-                            "forceLandscapeMode" -> {
-                                (context as? Activity)?.let { activity ->
-                                    activity.requestedOrientation =
-                                        if (checked) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-                                        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                                 }
                             }
                         }
@@ -1433,13 +1461,194 @@ private fun SettingsFieldRenderer(
 }
 
 // Helper functions
-fun String.capitalize(locale: Locale): String {
-    return replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+@Composable
+private fun SwipeFolderSettingRenderer(
+    fieldName: String,
+    uiState: AppSettings,
+    allFolders: List<HomeItem.Folder>,
+    onOpenFolderPicker: (String) -> Unit,
+) {
+    val titleAndSubtitle = when (fieldName) {
+        "swipeDownAction" -> {
+            if (uiState.swipeDownAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Swipe Down Folder" to (allFolders.find { it.id == uiState.swipeDownFolderId }?.title ?: "Not set")
+        }
+        "swipeUpAction" -> {
+            if (uiState.swipeUpAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Swipe Up Folder" to (allFolders.find { it.id == uiState.swipeUpFolderId }?.title ?: "Not set")
+        }
+        "swipeLeftAction" -> {
+            if (uiState.swipeLeftAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Swipe Left Folder" to (allFolders.find { it.id == uiState.swipeLeftFolderId }?.title ?: "Not set")
+        }
+        "swipeRightAction" -> {
+            if (uiState.swipeRightAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Swipe Right Folder" to (allFolders.find { it.id == uiState.swipeRightFolderId }?.title ?: "Not set")
+        }
+        else -> return
+    }
+
+    val direction = fieldName.removePrefix("swipe").removeSuffix("Action").lowercase()
+    SettingsItem(
+        title = titleAndSubtitle.first,
+        subtitle = titleAndSubtitle.second,
+        modifier = Modifier.padding(start = 24.dp),
+        onClick = { onOpenFolderPicker(direction) },
+    )
 }
 
-fun isAccessServiceEnabled(context: Context): Boolean {
-    val permissionManager = PermissionManager(context)
-    return permissionManager.hasAccessibilityPermission()
+@Composable
+private fun ManualSettingsEntryRenderer(
+    key: String,
+    uiState: AppSettings,
+    context: Context,
+    mainViewModel: MainViewModel,
+    viewModel: SettingsViewModel,
+    coroutineScope: kotlinx.coroutines.CoroutineScope,
+    onNavigateToHiddenApps: () -> Unit,
+    onNavigateToFolderList: () -> Unit,
+    onNavigateToCornerDotSettings: () -> Unit,
+    exportLauncher: androidx.activity.result.ActivityResultLauncher<String>,
+    importLauncher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+) {
+    when (key) {
+        MANUAL_ADD_WIDGET -> {
+            SettingsAction(
+                title = "Add Widget",
+                description = "Add a widget to your home screen",
+                onClick = {
+                    coroutineScope.launch {
+                        viewModel.emitEvent(UiEvent.NavigateToWidgetPicker)
+                    }
+                }
+            )
+        }
+
+        MANUAL_MANAGE_FOLDERS -> {
+            SettingsAction(
+                title = "Manage Folders",
+                description = "Create, rename, and inspect folders on the home screen",
+                onClick = onNavigateToFolderList,
+            )
+        }
+
+        MANUAL_CORNER_ZONES -> {
+            SettingsAction(
+                title = "Configure Corner Zones",
+                description = "Set up tap and hold shortcut zones in the home screen corners",
+                onClick = onNavigateToCornerDotSettings,
+            )
+        }
+
+        MANUAL_PRIVATE_SPACE -> {
+            if (mainViewModel.isPrivateSpaceSupported) {
+                val privateSpaceState by mainViewModel.privateSpaceState.collectAsState()
+                val subtitle = when (privateSpaceState) {
+                    MainViewModel.PrivateSpaceState.NotSetUp -> {
+                        "Tap to set up or manage Private Space (needs to be the default launcher)"
+                    }
+                    MainViewModel.PrivateSpaceState.Locked,
+                    MainViewModel.PrivateSpaceState.Unlocked -> "Tap to manage Private Space"
+                    else -> ""
+                }
+                SettingsItem(
+                    title = "Private Space",
+                    subtitle = subtitle,
+                    onClick = { mainViewModel.openPrivateSpaceSettings() },
+                )
+            } else {
+                SettingsItem(
+                    title = "Private Space",
+                    subtitle = "Requires Android 15 or higher",
+                    enabled = false,
+                    onClick = {},
+                    transparency = 0.7f,
+                )
+            }
+        }
+
+        MANUAL_DEFAULT_LAUNCHER -> {
+            val isDefault = isClauncherDefault(context)
+            SettingsItem(
+                title = "Set as Default Launcher",
+                subtitle = if (isDefault) "CCLauncher is default" else "CCLauncher is not default",
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
+                },
+                transparency = if (isDefault) 0.7f else 1.0f,
+            )
+        }
+
+        MANUAL_LOCK_SETTINGS -> {
+            SettingsToggle(
+                title = "Lock Settings",
+                description = "Prevent changes to settings without a PIN",
+                isChecked = uiState.lockSettings,
+                onCheckedChange = { locked ->
+                    if (locked) {
+                        viewModel.setShowLockDialog(true, true)
+                    } else {
+                        viewModel.toggleLockSettings(false)
+                    }
+                }
+            )
+        }
+
+        MANUAL_HIDDEN_APPS -> {
+            SettingsItem(
+                title = "Hidden Apps",
+                description = "Manage apps hidden from the app drawer",
+                onClick = onNavigateToHiddenApps,
+            )
+        }
+
+        MANUAL_APP_INFO -> {
+            SettingsItem(
+                title = "App Info",
+                description = "Open CCLauncher's system app info page",
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = Uri.fromParts("package", context.packageName, null)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                    )
+                }
+            )
+        }
+
+        MANUAL_ABOUT -> {
+            SettingsItem(
+                title = "About CCLauncher",
+                subtitle = "Version ${context.packageManager.getPackageInfo(context.packageName, 0).versionName}",
+                onClick = {
+                    coroutineScope.launch {
+                        viewModel.emitEvent(UiEvent.ShowDialog(Constants.Dialog.ABOUT))
+                    }
+                }
+            )
+        }
+
+        MANUAL_EXPORT_SETTINGS -> {
+            SettingsAction(
+                title = "Export Settings",
+                description = "Save your settings to a file",
+                onClick = {
+                    val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
+                        .format(Date())
+                    exportLauncher.launch("cclauncher_settings_$timestamp.json")
+                }
+            )
+        }
+
+        MANUAL_IMPORT_SETTINGS -> {
+            SettingsAction(
+                title = "Import Settings",
+                description = "Restore settings from a backup file",
+                onClick = { importLauncher.launch(arrayOf("application/json", "*/*")) }
+            )
+        }
+    }
 }
 
 fun isClauncherDefault(context: Context): Boolean {
@@ -1466,7 +1675,7 @@ private fun PreviewSettingsGeneralTab() {
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                val tabs = listOf("General", "Appearance", "Layout", "Gestures", "Widgets", "Folders", "System", "Backup")
+                val tabs = settingsTabs.map { it.title }
                 val pagerState = rememberPagerState(pageCount = { tabs.size })
                 val scope = rememberCoroutineScope()
 
@@ -1489,110 +1698,124 @@ private fun PreviewSettingsGeneralTab() {
                 HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
                         when (page) {
-                            0 -> item {
-                                SettingsSection(title = "General") {
-                                    SettingsToggle(title = "Show App Names", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Auto Show Keyboard", isChecked = true, onCheckedChange = {})
-                                    SettingsToggle(title = "Auto Open Single Matches", isChecked = true, onCheckedChange = {})
-                                    SettingsItem(title = "Search Bar Placement", subtitle = "Top", onClick = {})
-                                    SettingsItem(title = "Search Type", subtitle = "Contains", onClick = {})
-                                    SettingsItem(title = "Default Screen", subtitle = "Home", onClick = {})
-                                    SettingsItem(title = "Search Sort Order", subtitle = "Alphabetical", onClick = {})
-                                    SettingsToggle(title = "Show Hidden in Search", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Show Web Search Option", isChecked = true, onCheckedChange = {})
-                                    SettingsToggle(title = "Return to Home After App", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Show Pinned Shortcuts", isChecked = true, onCheckedChange = {})
-                                    SettingsToggle(title = "Show Scrollbar", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "App Drawer Tap to Open", isChecked = true, onCheckedChange = {})
+                            0 -> {
+                                item {
+                                    SettingsSection(title = "Grid & Pages") {
+                                        SettingsItem(title = "Home Screen Rows", subtitle = "8", onClick = {})
+                                        SettingsItem(title = "Home Screen Columns", subtitle = "4", onClick = {})
+                                        SettingsItem(title = "Home Screen Pages", subtitle = "1", onClick = {})
+                                        SettingsToggle(title = "Show Page Indicator", isChecked = true, onCheckedChange = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Icons & Labels") {
+                                        SettingsToggle(title = "Show App Icons on Home Screen", isChecked = false, onCheckedChange = {})
+                                        SettingsItem(title = "Home Text Size (Default)", subtitle = "1.0", onClick = {})
+                                        SettingsItem(title = "Home Label Font (Default)", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Home App Label Alignment (Default)", subtitle = "Left", onClick = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Shortcuts & PWAs") {
+                                        SettingsToggle(title = "Show Web Icon for Shortcuts", isChecked = true, onCheckedChange = {})
+                                        SettingsItem(title = "PWA Icon Placement (Default)", subtitle = "Left", onClick = {})
+                                    }
                                 }
                             }
-                            1 -> item {
-                                SettingsSection(title = "Appearance") {
-                                    SettingsItem(title = "Theme", subtitle = "Dark", onClick = {})
-                                    SettingsItem(title = "Font Weight", subtitle = "Normal", onClick = {})
-                                    SettingsToggle(title = "Use System Font", isChecked = true, onCheckedChange = {})
-                                    SettingsItem(title = "Custom Font", subtitle = "None selected", onClick = {})
-                                    SettingsToggle(title = "Use Dynamic Theme", isChecked = false, onCheckedChange = {})
-                                    SettingsItem(title = "Home Text Size", subtitle = "1.0", onClick = {})
-                                    SettingsItem(title = "Search Results Text Size", subtitle = "1.0", onClick = {})
-                                    SettingsItem(title = "Icon Corner Radius", subtitle = "0", onClick = {})
-                                    SettingsItem(title = "Home App Label Alignment", subtitle = "Left", onClick = {})
-                                    SettingsItem(title = "App Drawer Alignment", subtitle = "Left", onClick = {})
-                                    SettingsToggle(title = "Use Custom Text Color", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Show App Icons on Home Screen", isChecked = false, onCheckedChange = {})
-                                    SettingsItem(title = "Item Spacing", subtitle = "Small", onClick = {})
-                                    SettingsItem(title = "Icon Pack", subtitle = "Default", onClick = {})
-                                    SettingsAction(title = "Set Plain Wallpaper", description = "Set a plain black/white wallpaper based on theme", onClick = {})
-                                    SettingsToggle(title = "Auto Update Wallpaper", isChecked = false, onCheckedChange = {})
-                                    SettingsItem(title = "Screen Orientation", subtitle = "System Default", onClick = {})
+                            1 -> {
+                                item {
+                                    SettingsSection(title = "Launch & Search") {
+                                        SettingsItem(title = "Default Screen", subtitle = "Home", onClick = {})
+                                        SettingsToggle(title = "Auto Show Keyboard", isChecked = true, onCheckedChange = {})
+                                        SettingsToggle(title = "Auto Open Single Matches", isChecked = true, onCheckedChange = {})
+                                        SettingsToggle(title = "Tap to Open in App Drawer", isChecked = true, onCheckedChange = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "List Layout") {
+                                        SettingsToggle(title = "Show App Names", isChecked = false, onCheckedChange = {})
+                                        SettingsItem(title = "Search Bar Placement", subtitle = "Top", onClick = {})
+                                        SettingsToggle(title = "Show Scrollbar", isChecked = false, onCheckedChange = {})
+                                        SettingsItem(title = "App Drawer Alignment", subtitle = "Left", onClick = {})
+                                    }
                                 }
                             }
-                            2 -> item {
-                                SettingsSection(title = "Layout") {
-                                    SettingsToggle(title = "Show Status Bar", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Scale Home Apps", isChecked = true, onCheckedChange = {})
-                                    SettingsItem(title = "Home Screen Rows", subtitle = "8", onClick = {})
-                                    SettingsItem(title = "Home Screen Columns", subtitle = "4", onClick = {})
-                                    SettingsItem(title = "Home Screen Pages", subtitle = "1", onClick = {})
-                                    SettingsToggle(title = "Show Page Indicator", isChecked = true, onCheckedChange = {})
-                                    SettingsToggle(title = "Show Grid Overlay in Move Mode", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Show App Icons in Portrait", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Show App Icons in Landscape", isChecked = false, onCheckedChange = {})
+                            2 -> {
+                                item {
+                                    SettingsSection(title = "Theme & Display") {
+                                        SettingsItem(title = "Theme", subtitle = "Dark", onClick = {})
+                                        SettingsToggle(title = "Use Dynamic Theme", isChecked = false, onCheckedChange = {})
+                                        SettingsItem(title = "Screen Orientation", subtitle = "System Default", onClick = {})
+                                        SettingsToggle(title = "Show Status Bar", isChecked = false, onCheckedChange = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Fonts") {
+                                        SettingsItem(title = "Font Weight", subtitle = "Normal", onClick = {})
+                                        SettingsToggle(title = "Use System Font", isChecked = true, onCheckedChange = {})
+                                        SettingsItem(title = "Custom Font", subtitle = "System default", onClick = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Wallpaper") {
+                                        SettingsAction(title = "Set Plain Wallpaper", description = "Set a plain black or white wallpaper based on theme", onClick = {})
+                                        SettingsToggle(title = "Auto Update Wallpaper", isChecked = false, onCheckedChange = {})
+                                    }
                                 }
                             }
-                            3 -> item {
-                                SettingsSection(title = "Gestures") {
-                                    SettingsItem(title = "Gesture Sensitivity", subtitle = "1.0", onClick = {})
-                                    SettingsToggle(title = "Double Tap to Lock Screen", isChecked = false, onCheckedChange = {})
-                                    SettingsToggle(title = "Long Press in App Drawer", isChecked = true, onCheckedChange = {})
-                                    SettingsToggle(title = "Swipe Gestures in Folders", isChecked = false, onCheckedChange = {})
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                    Text(
-                                        "Swipe Gestures",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
-                                    )
-                                    SettingsItem(title = "Swipe Down Action", subtitle = "Notifications", onClick = {})
-                                    SettingsItem(title = "Swipe Up Action", subtitle = "Search", onClick = {})
-                                    SettingsItem(title = "Swipe Left Action", subtitle = "None", onClick = {})
-                                    SettingsItem(title = "Swipe Right Action", subtitle = "None", onClick = {})
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                                    Text(
-                                        "Corner Zones",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp),
-                                    )
-                                    SettingsAction(title = "Configure Corner Zones", description = "Set up tap & hold shortcut zones in the home screen corners", onClick = {})
+                            3 -> {
+                                item {
+                                    SettingsSection(title = "General") {
+                                        SettingsItem(title = "Gesture Sensitivity", subtitle = "1.0", onClick = {})
+                                        SettingsToggle(title = "Double Tap to Lock Screen", isChecked = false, onCheckedChange = {})
+                                        SettingsToggle(title = "Swipe Gestures in Folders", isChecked = false, onCheckedChange = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Swipe Down") {
+                                        SettingsItem(title = "Swipe Down Action", subtitle = "Notifications", onClick = {})
+                                        SettingsItem(title = "Swipe Down App", subtitle = "Not set", onClick = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Corner Zones") {
+                                        SettingsAction(title = "Configure Corner Zones", description = "Set up tap and hold shortcut zones in the home screen corners", onClick = {})
+                                    }
                                 }
                             }
-                            4 -> item {
-                                SettingsSection(title = "Widgets") {
-                                    SettingsAction(title = "Add Widget", description = "Add a widget to your home screen", onClick = {})
+                            4 -> {
+                                item {
+                                    SettingsSection(title = "Folder Defaults") {
+                                        SettingsToggle(title = "Show Folder Icon", isChecked = true, onCheckedChange = {})
+                                        SettingsItem(title = "Folder Icon Placement (Default)", subtitle = "Left", onClick = {})
+                                        SettingsItem(title = "Folder Label Font (Default)", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Folder Background Opacity", subtitle = "0.6", onClick = {})
+                                    }
+                                }
+                                item {
+                                    SettingsSection(title = "Manage Folders") {
+                                        SettingsAction(title = "Manage Folders", description = "Create, rename, and inspect folders on the home screen", onClick = {})
+                                    }
                                 }
                             }
-                            5 -> item {
-                                SettingsSection(title = "Folders") {
-                                    SettingsToggle(title = "Show Folder Icon", isChecked = true, onCheckedChange = {})
-                                    SettingsItem(title = "Folder Background Opacity", subtitle = "0.6", onClick = {})
-                                    SettingsAction(title = "Add Folder", description = "Create a new folder on your home screen", onClick = {})
-                                    SettingsAction(title = "Manage Folders", description = "View and configure existing folders", onClick = {})
+                            5 -> {
+                                item {
+                                    SettingsSection(title = "Launcher Access") {
+                                        SettingsItem(title = "Set as Default Launcher", subtitle = "CCLauncher is not default", onClick = {})
+                                        SettingsItem(title = "Private Space", subtitle = "Tap to set up or manage Private Space", onClick = {})
+                                        SettingsItem(title = "Hidden Apps", onClick = {})
+                                    }
                                 }
-                            }
-                            6 -> item {
-                                SettingsSection(title = "System") {
-                                    SettingsItem(title = "Set as Default Launcher", subtitle = "CCLauncher is not default", onClick = {})
-                                    SettingsToggle(title = "Lock Settings", description = "Prevent changes to settings without a PIN", isChecked = false, onCheckedChange = {})
-                                    SettingsItem(title = "Hidden Apps", onClick = {})
-                                    SettingsItem(title = "App Info", onClick = {})
-                                    SettingsItem(title = "About CCLauncher", subtitle = "1.0.0", onClick = {})
+                                item {
+                                    SettingsSection(title = "Security") {
+                                        SettingsToggle(title = "Lock Settings", description = "Prevent changes to settings without a PIN", isChecked = false, onCheckedChange = {})
+                                    }
                                 }
-                            }
-                            7 -> item {
-                                SettingsSection(title = "Backup") {
-                                    SettingsAction(title = "Export Settings", description = "Save your settings to a backup file", onClick = {})
-                                    SettingsAction(title = "Import Settings", description = "Restore settings from a backup file", onClick = {})
+                                item {
+                                    SettingsSection(title = "Backup & Restore") {
+                                        SettingsAction(title = "Export Settings", description = "Save your settings to a backup file", onClick = {})
+                                        SettingsAction(title = "Import Settings", description = "Restore settings from a backup file", onClick = {})
+                                    }
                                 }
                             }
                         }
