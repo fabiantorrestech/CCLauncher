@@ -208,6 +208,28 @@ fun FolderDetailScreen(
             }
 
             item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Tap Empty Space to Close", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Dismiss the folder by tapping the backdrop or any empty grid cell",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        )
+                    }
+                    Switch(
+                        checked = folder.tapOutsideToClose,
+                        onCheckedChange = { viewModel.setFolderTapOutsideToClose(folderId, it) },
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+            }
+
+            item {
                 Text("Grid Rows: ${gridRows.toInt()}", style = MaterialTheme.typography.labelLarge)
                 AppSlider(
                     value = gridRows,

@@ -56,6 +56,16 @@ data class AppSettings(
     )
     val showShortcutIcon: Boolean = true,
 
+    @Setting(
+        title = "PWA Icon Placement (Default)",
+        description = "Default side for the web icon on newly placed shortcuts and PWAs",
+        category = General::class,
+        type = Dropdown::class,
+        options = ["Left", "Right"],
+        key = "SHORTCUT_ICON_PLACEMENT",
+    )
+    val shortcutIconPlacement: Int = Constants.IconPlacement.LEFT,
+
     @Persisted(key = "SHOW_APP_ICONS")
     val showAppIcons: Boolean = true,
 
@@ -633,6 +643,16 @@ data class AppSettings(
         key = "SHOW_FOLDER_ICON",
     )
     val showFolderIcon: Boolean = true,
+
+    @Setting(
+        title = "Folder Icon Placement (Default)",
+        description = "Default side for the folder icon on newly placed folders",
+        category = Folders::class,
+        type = Dropdown::class,
+        options = ["Left", "Right"],
+        key = "FOLDER_ICON_PLACEMENT",
+    )
+    val folderIconPlacement: Int = Constants.IconPlacement.LEFT,
 
     @Setting(
         title = "Folder Background Opacity",

@@ -358,6 +358,10 @@ fun HomeScreen(
                     onLabelAlignmentChange = { alignment ->
                         viewModel.updateHomeAppLabelAlignment(it, alignment)
                     },
+                    showShortcutIconSetting = settings.showShortcutIcon,
+                    onIconPlacementChange = { placement ->
+                        viewModel.updateHomeAppIconPlacement(it, placement)
+                    },
                     onNavigateToSettings = onNavigateToSettings,
                 )
             }
@@ -441,6 +445,10 @@ fun HomeScreen(
                     onLabelAlignmentChange = { alignment ->
                         viewModel.updateFolderTitleLabelAlignment(it.id, alignment)
                     },
+                    showFolderIconSetting = settings.showFolderIcon,
+                    onIconPlacementChange = { placement ->
+                        viewModel.updateFolderIconPlacement(it.id, placement)
+                    },
                     onNavigateToSettings = onNavigateToSettings,
                 )
             }
@@ -506,7 +514,10 @@ fun HomeScreen(
                     },
                     onAppLabelAlignmentChange = { folderApp, alignment ->
                         viewModel.updateFolderAppIndividualLabelAlignment(fid, folderApp, alignment)
-                    }
+                    },
+                    onAppIconPlacementChange = { folderApp, placement ->
+                        viewModel.updateFolderAppIconPlacement(fid, folderApp, placement)
+                    },
                 )
             }
         }
@@ -730,6 +741,7 @@ private fun HomeScreenContent(
                             onLongClick = { onAppLongPress(item) },
                             appTextSize = item.appTextSize,
                             appLabelAlignment = item.appLabelAlignment,
+                            shortcutIconPlacement = item.iconPlacement,
                         )
                     }
 
@@ -954,12 +966,15 @@ fun HomeAppContextMenu(
     onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
+    showShortcutIconSetting: Boolean = true,
+    onIconPlacementChange: (Int) -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
+    var showIconPlacementPicker by remember { mutableStateOf(false) }
 
     if (showPageSelector) {
         PageSelectorDialog(
@@ -1013,6 +1028,16 @@ fun HomeAppContextMenu(
             onAlignmentSelected = { alignment ->
                 onLabelAlignmentChange(alignment)
                 showLabelAlignmentPicker = false
+                onDismiss()
+            }
+        )
+    } else if (showIconPlacementPicker) {
+        IconPlacementDialog(
+            currentPlacement = appItem.iconPlacement,
+            onDismiss = { showIconPlacementPicker = false },
+            onPlacementSelected = { placement ->
+                onIconPlacementChange(placement)
+                showIconPlacementPicker = false
                 onDismiss()
             }
         )
@@ -1079,6 +1104,12 @@ fun HomeAppContextMenu(
                         text = { Text("Label Alignment") },
                         onClick = { showLabelAlignmentPicker = true }
                     )
+                    if (appItem.appModel.isSystemShortcut && showShortcutIconSetting) {
+                        DropdownMenuItem(
+                            text = { Text("Change Icon Placement") },
+                            onClick = { showIconPlacementPicker = true }
+                        )
+                    }
                     if (folders.isNotEmpty() && onAddToFolder != null) {
                         DropdownMenuItem(
                             text = { Text("Add to Folder...") },
@@ -1128,6 +1159,40 @@ private fun PageSelectorDialog(
                     DropdownMenuItem(
                         text = { Text("+ New Page") },
                         onClick = { onPageSelected(pageCount) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun IconPlacementDialog(
+    currentPlacement: Int,
+    onDismiss: () -> Unit,
+    onPlacementSelected: (Int) -> Unit,
+) {
+    val options = listOf("Left" to Constants.IconPlacement.LEFT, "Right" to Constants.IconPlacement.RIGHT)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Change Icon Placement") },
+        text = {
+            Column {
+                options.forEach { (label, value) ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (value == currentPlacement) "$label (current)" else label,
+                                color = if (value == currentPlacement)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                        },
+                        onClick = { if (value != currentPlacement) onPlacementSelected(value) },
+                        enabled = value != currentPlacement,
                     )
                 }
             }
@@ -1598,12 +1663,15 @@ fun FolderContextMenu(
     onRename: (HomeItem.Folder, String) -> Unit,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
+    showFolderIconSetting: Boolean = true,
+    onIconPlacementChange: (Int) -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
+    var showIconPlacementPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var renameValue by remember { mutableStateOf(folderItem.title) }
 
@@ -1681,6 +1749,16 @@ fun FolderContextMenu(
                 onDismiss()
             }
         )
+    } else if (showIconPlacementPicker) {
+        IconPlacementDialog(
+            currentPlacement = folderItem.iconPlacement,
+            onDismiss = { showIconPlacementPicker = false },
+            onPlacementSelected = { placement ->
+                onIconPlacementChange(placement)
+                showIconPlacementPicker = false
+                onDismiss()
+            }
+        )
     } else if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
@@ -1724,6 +1802,9 @@ fun FolderContextMenu(
                     DropdownMenuItem(text = { Text("Resize") }, onClick = { onResize(folderItem); onDismiss() })
                     DropdownMenuItem(text = { Text("Text Size") }, onClick = { showTextSizeEditor = true })
                     DropdownMenuItem(text = { Text("Label Alignment") }, onClick = { showLabelAlignmentPicker = true })
+                    if (showFolderIconSetting) {
+                        DropdownMenuItem(text = { Text("Change Icon Placement") }, onClick = { showIconPlacementPicker = true })
+                    }
                     DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
                     DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemoveFromHome(folderItem); onDismiss() })
                     DropdownMenuItem(text = { Text("Delete") }, onClick = { showDeleteConfirm = true })

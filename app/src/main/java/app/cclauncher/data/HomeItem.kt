@@ -20,6 +20,7 @@ sealed class HomeItem {
         val appModel: AppModel,
         val appTextSize: Float = 1.0f,
         val appLabelAlignment: Int = -1,
+        val iconPlacement: Int = Constants.IconPlacement.LEFT,
         override val id: String = appModel.getKey(),
         override val page: Int = 0,
         override val row: Int,
@@ -53,14 +54,17 @@ sealed class HomeItem {
         val titleTextSize: Float = 1.0f,
         val titleTextColor: Int = 0,
         val titleLabelAlignment: Int = -1,
+        val iconPlacement: Int = Constants.IconPlacement.LEFT,
         /** When false the folder tile is hidden from the home grid but can still be opened via gestures/dots. */
         val showOnHome: Boolean = true,
         /** Hide the folder name text in the overlay header. */
-        val hideTitle: Boolean = false,
+        val hideTitle: Boolean = true,
         /** Hide the close (X) button in the overlay header. */
-        val hideCloseButton: Boolean = false,
+        val hideCloseButton: Boolean = true,
         /** Hide the rounded-rectangle border around the folder overlay. */
-        val hideOutline: Boolean = false,
+        val hideOutline: Boolean = true,
+        /** Dismiss the folder by tapping any unoccupied space (backdrop or empty grid cell). */
+        val tapOutsideToClose: Boolean = true,
         override val id: String = "folder_${UUID.randomUUID()}",
         override val page: Int = 0,
         override val row: Int,
@@ -86,6 +90,7 @@ data class FolderApp(
     val systemShortcutPackage: String? = null,
     val appTextSize: Float = 1.0f,
     val appLabelAlignment: Int = -1,
+    val iconPlacement: Int = Constants.IconPlacement.LEFT,
 ) {
     fun toAppModel() = AppModel(
         appLabel = appLabel,
@@ -98,7 +103,11 @@ data class FolderApp(
     )
 }
 
-fun AppModel.toFolderApp(row: Int, column: Int) = FolderApp(
+fun AppModel.toFolderApp(
+    row: Int,
+    column: Int,
+    iconPlacement: Int = Constants.IconPlacement.LEFT,
+) = FolderApp(
     appLabel = appLabel,
     appPackage = appPackage,
     activityClassName = activityClassName,
@@ -108,6 +117,7 @@ fun AppModel.toFolderApp(row: Int, column: Int) = FolderApp(
     isSystemShortcut = isSystemShortcut,
     systemShortcutId = systemShortcutId,
     systemShortcutPackage = systemShortcutPackage,
+    iconPlacement = iconPlacement,
 )
 
 @Serializable

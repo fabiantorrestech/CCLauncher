@@ -316,11 +316,30 @@ fun AppDrawerScreen(
     //   bottom=true,  reverseAppList=true  → false (A's at top    — toggled)
     //   bottom=false, reverseAppList=false → false (A's at top    — default)
     //   bottom=false, reverseAppList=true  → true  (A's at bottom — toggled)
-    // Search results never use reverse layout (they rely on content ordering alone).
-    val shouldReverseLayout = searchQuery.isEmpty() && (isBottomSearch != reverseAppList)
+    // During bottom+inverted search, reverseLayout anchors item 0 (best match) at the
+    // bottom near the search bar — no imperative scrolling needed.
+    val shouldReverseLayout = if (searchQuery.isEmpty()) {
+        isBottomSearch != reverseAppList
+    } else {
+        isBottomSearch && invertSearchResults
+    }
 
-    val displayList = remember(appsToShow, invertSearchResults, searchQuery) {
-        if (invertSearchResults && searchQuery.isNotEmpty()) appsToShow.reversed() else appsToShow
+    // When bottom+inverted search is active, reverseLayout handles the visual flip, so
+    // we keep the list in its natural order (best match at index 0 = bottom of the view).
+    // For top search with invertSearchResults, we still reverse the content manually.
+    val displayList = remember(appsToShow, invertSearchResults, searchQuery, isBottomSearch) {
+        if (invertSearchResults && searchQuery.isNotEmpty() && !isBottomSearch) appsToShow.reversed() else appsToShow
+    }
+
+    // With reverseLayout=true, item 0 is always the bottom anchor. Re-snap after every
+    // displayList change (keyed here, not on searchQuery, so it fires after the ViewModel
+    // has emitted the updated filtered results). yield() defers past the layout pass so
+    // scrollToItem(0) runs after LazyColumn has settled its new item positions.
+    LaunchedEffect(displayList) {
+        if (isBottomSearch && invertSearchResults && searchQuery.isNotEmpty() && displayList.isNotEmpty()) {
+            yield()
+            scrollState.scrollToItem(0)
+        }
     }
 
     val privateSpaceState by viewModel.privateSpaceState.collectAsState()

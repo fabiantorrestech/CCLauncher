@@ -474,9 +474,15 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val nextPos = findNextAvailableGridPosition(currentLayout, 1, 1, page)
 
             if (nextPos != null) {
+                val settings = settingsRepository.settings.first()
                 val appModelWithUserString = appModel.copy(userString = appModel.userString)
                 val appItem = HomeItem.App(
                     appModel = appModelWithUserString,
+                    iconPlacement = if (appModel.isSystemShortcut) {
+                        settings.shortcutIconPlacement
+                    } else {
+                        Constants.IconPlacement.LEFT
+                    },
                     page = page,
                     row = nextPos.first,
                     column = nextPos.second
@@ -565,8 +571,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val page = targetPage ?: _currentPage.value
             val nextPos = findNextAvailableGridPosition(currentLayout, 1, 1, page)
             if (nextPos != null) {
+                val settings = settingsRepository.settings.first()
                 val folder = HomeItem.Folder(
                     title = title.ifBlank { "Folder" },
+                    iconPlacement = settings.folderIconPlacement,
                     page = page,
                     row = nextPos.first,
                     column = nextPos.second,
@@ -594,7 +602,16 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 snackbarManager.show("No space available in this folder.")
                 return@launch
             }
-            val folderApp = appModel.toFolderApp(pos.first, pos.second)
+            val settings = settingsRepository.settings.first()
+            val folderApp = appModel.toFolderApp(
+                row = pos.first,
+                column = pos.second,
+                iconPlacement = if (appModel.isSystemShortcut) {
+                    settings.shortcutIconPlacement
+                } else {
+                    Constants.IconPlacement.LEFT
+                },
+            )
             val updatedFolder = folder.copy(apps = folder.apps + folderApp)
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
@@ -811,6 +828,15 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun setFolderTapOutsideToClose(folderId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) folder.copy(tapOutsideToClose = enabled) else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun updateHomeAppTextSize(appItem: HomeItem.App, textSize: Float) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value
@@ -840,6 +866,15 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun updateHomeAppIconPlacement(appItem: HomeItem.App, placement: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val updatedApp = appItem.copy(iconPlacement = placement)
+            val updatedItems = currentLayout.items.map { if (it.id == appItem.id) updatedApp else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun updateFolderTitleLabelAlignment(folderId: String, alignment: Int) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value
@@ -850,11 +885,32 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
+    fun updateFolderIconPlacement(folderId: String, placement: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedFolder = folder.copy(iconPlacement = placement)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
     fun updateFolderAppIndividualLabelAlignment(folderId: String, folderApp: FolderApp, alignment: Int) {
         viewModelScope.launch {
             val currentLayout = _homeLayoutState.value
             val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
             val updatedApp = folderApp.copy(appLabelAlignment = alignment)
+            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+        }
+    }
+
+    fun updateFolderAppIconPlacement(folderId: String, folderApp: FolderApp, placement: Int) {
+        viewModelScope.launch {
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
+            val updatedApp = folderApp.copy(iconPlacement = placement)
             val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))

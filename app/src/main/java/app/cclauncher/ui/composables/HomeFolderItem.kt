@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -23,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
 import app.cclauncher.settings.AppSettings
 
@@ -61,6 +63,17 @@ fun HomeFolderItem(
         2 -> TextAlign.Right
         else -> TextAlign.Left
     }
+    val columnHorizontalAlignment = when (effectiveAlignment) {
+        1 -> Alignment.CenterHorizontally
+        2 -> Alignment.End
+        else -> Alignment.Start
+    }
+    val rowArrangement = when (effectiveAlignment) {
+        1 -> Arrangement.Center
+        2 -> Arrangement.End
+        else -> Arrangement.Start
+    }
+    val showFolderIconOnRight = folder.iconPlacement == Constants.IconPlacement.RIGHT
 
     Column(
         modifier = modifier
@@ -73,19 +86,23 @@ fun HomeFolderItem(
             }
             .padding(4.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.Start,
+        horizontalAlignment = columnHorizontalAlignment,
     ) {
         if (settings.showFolderIcon) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = rowArrangement,
             ) {
-                Icon(
-                    imageVector = Icons.Default.Folder,
-                    contentDescription = null,
-                    tint = textColor,
-                    modifier = Modifier.size(14.dp),
-                )
+                if (!showFolderIconOnRight) {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = textColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(4.dp))
+                }
                 Text(
                     text = folder.title,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -93,10 +110,18 @@ fun HomeFolderItem(
                         fontWeight = fontWeight,
                     ),
                     color = textColor,
-                    textAlign = textAlign,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (showFolderIconOnRight) {
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(4.dp))
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = textColor,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
             }
         } else {
             Text(
@@ -109,6 +134,7 @@ fun HomeFolderItem(
                 textAlign = textAlign,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

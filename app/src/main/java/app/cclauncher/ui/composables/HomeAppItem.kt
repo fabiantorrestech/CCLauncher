@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cclauncher.data.AppModel
+import app.cclauncher.data.Constants
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.helper.IconCache
 import kotlinx.coroutines.launch
@@ -56,6 +57,7 @@ fun HomeAppItem(
     appHeight: Dp,
     appTextSize: Float = 1.0f,
     appLabelAlignment: Int = -1,
+    shortcutIconPlacement: Int = Constants.IconPlacement.LEFT,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -124,6 +126,18 @@ fun HomeAppItem(
         2 -> TextAlign.Right
         else -> TextAlign.Left
     }
+    val columnHorizontalAlignment = when (effectiveAlignment) {
+        1 -> Alignment.CenterHorizontally
+        2 -> Alignment.End
+        else -> Alignment.Start
+    }
+    val rowArrangement = when (effectiveAlignment) {
+        1 -> Arrangement.Center
+        2 -> Arrangement.End
+        else -> Arrangement.Start
+    }
+    val showShortcutIcon = app.isSystemShortcut && settings.showShortcutIcon
+    val showShortcutIconOnRight = shortcutIconPlacement == Constants.IconPlacement.RIGHT
 
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongClick by rememberUpdatedState(onLongClick)
@@ -139,7 +153,7 @@ fun HomeAppItem(
             }
             .padding(4.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = if (settings.showHomeScreenIcons) Alignment.CenterHorizontally else Alignment.Start
+        horizontalAlignment = if (settings.showHomeScreenIcons) Alignment.CenterHorizontally else columnHorizontalAlignment
     ) {
         if (showIcons && loadedIcon != null) {
             Surface(
@@ -158,18 +172,21 @@ fun HomeAppItem(
         }
 
         if (showName) {
-            if (app.isSystemShortcut && settings.showShortcutIcon) {
+            if (showShortcutIcon) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = rowArrangement,
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        tint = textColor,
-                        modifier = Modifier.size(12.dp),
-                    )
+                    if (!showShortcutIconOnRight) {
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = textColor,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Spacer(modifier = Modifier.size(4.dp))
+                    }
                     Text(
                         text = app.appLabel,
                         style = MaterialTheme.typography.bodyMedium.copy(
@@ -177,10 +194,18 @@ fun HomeAppItem(
                             fontWeight = fontWeight
                         ),
                         color = textColor,
-                        textAlign = textAlign,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    if (showShortcutIconOnRight) {
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Language,
+                            contentDescription = null,
+                            tint = textColor,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    }
                 }
             } else {
                 Text(

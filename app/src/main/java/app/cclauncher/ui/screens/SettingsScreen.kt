@@ -301,13 +301,6 @@ fun SettingsScreen(
                 onClick = { coroutineScope.launch { viewModel.emitEvent(UiEvent.NavigateToWidgetPicker) } }
             ),
             ManualSearchItem(
-                key = "add_folder",
-                title = "Add Folder",
-                description = "Create a new folder on your home screen",
-                category = "Folders",
-                onClick = { newFolderName = ""; showCreateFolderDialog = true }
-            ),
-            ManualSearchItem(
                 key = "manage_folders",
                 title = "Manage Folders",
                 description = "View and configure existing folders",
@@ -998,52 +991,19 @@ fun SettingsScreen(
                                 item(key = "folders") {
                                     SettingsSection(title = "Folders") {
                                         folderFields.forEach { field ->
-                                            val meta = field.meta ?: return@forEach
-                                            val isEnabled = schema.isEnabled(uiState, field)
-                                            when (meta.type) {
-                                                Toggle::class -> {
-                                                    val value = (field.get(uiState) as? Boolean) ?: false
-                                                    SettingsToggle(
-                                                        title = meta.title,
-                                                        description = meta.description.takeIf { it.isNotEmpty() },
-                                                        isChecked = value,
-                                                        enabled = isEnabled,
-                                                        onCheckedChange = { checked ->
-                                                            coroutineScope.launch {
-                                                                viewModel.updateSetting(field.name, checked)
-                                                            }
-                                                        }
-                                                    )
-                                                }
-                                                Slider::class -> {
-                                                    val v = field.get(uiState)
-                                                    val subtitle = when (v) {
-                                                        is Float -> String.format(Locale.getDefault(), "%.1f", v)
-                                                        is Int -> v.toString()
-                                                        else -> ""
-                                                    }
-                                                    SettingsItem(
-                                                        title = meta.title,
-                                                        subtitle = subtitle,
-                                                        description = meta.description.takeIf { it.isNotEmpty() },
-                                                        enabled = isEnabled,
-                                                        onClick = {
-                                                            currentField = field
-                                                            showingDialog = "slider"
-                                                        }
-                                                    )
-                                                }
-                                                else -> {}
+                                            key(field.name) {
+                                                SettingsFieldRenderer(
+                                                    field = field,
+                                                    uiState = uiState,
+                                                    schema = schema,
+                                                    coroutineScope = coroutineScope,
+                                                    viewModel = viewModel,
+                                                    context = context,
+                                                    onShowDialog = onFieldAction,
+                                                    onShowAccessibilityDisclosure = { showAccessibilityDisclosure = true },
+                                                )
                                             }
                                         }
-                                        SettingsAction(
-                                            title = "Add Folder",
-                                            description = "Create a new folder on your home screen",
-                                            onClick = {
-                                                newFolderName = ""
-                                                showCreateFolderDialog = true
-                                            }
-                                        )
                                         SettingsAction(
                                             title = "Manage Folders",
                                             description = "View and configure existing folders",

@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -48,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
 import app.cclauncher.helper.showToast
@@ -66,6 +70,7 @@ fun FolderOverlay(
     onResizeApp: (FolderApp, Int, Int) -> Unit,
     onAppTextSizeChange: (FolderApp, Float) -> Unit = { _, _ -> },
     onAppLabelAlignmentChange: (FolderApp, Int) -> Unit = { _, _ -> },
+    onAppIconPlacementChange: (FolderApp, Int) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     var movingApp by remember { mutableStateOf<FolderApp?>(null) }
@@ -73,6 +78,7 @@ fun FolderOverlay(
     var resizingApp by remember { mutableStateOf<FolderApp?>(null) }
     var textSizingApp by remember { mutableStateOf<FolderApp?>(null) }
     var alignmentApp by remember { mutableStateOf<FolderApp?>(null) }
+    var iconPlacementApp by remember { mutableStateOf<FolderApp?>(null) }
 
     BackHandler { onDismiss() }
 
@@ -83,6 +89,11 @@ fun FolderOverlay(
             // Consume drag events so swipe gestures on the backdrop don't leak through
             // to the home screen gesture handler underneath.
             .pointerInput(Unit) { detectDragGestures(onDrag = { change, _ -> change.consume() }) }
+            .then(
+                if (folder.tapOutsideToClose)
+                    Modifier.pointerInput(Unit) { detectTapGestures { onDismiss() } }
+                else Modifier
+            )
     ) {
         Surface(
             modifier = Modifier
@@ -168,6 +179,8 @@ fun FolderOverlay(
                                         val app = findFolderAppAtPosition(folder, offset, size)
                                         if (app != null) {
                                             onLaunchApp(app)
+                                        } else if (folder.tapOutsideToClose) {
+                                            onDismiss()
                                         }
                                     }
                                 }
@@ -215,6 +228,12 @@ fun FolderOverlay(
                             text = { Text("Label Alignment") },
                             onClick = { alignmentApp = app; appContextMenu = null }
                         )
+                        if (app.isSystemShortcut && settings.showShortcutIcon) {
+                            DropdownMenuItem(
+                                text = { Text("Change Icon Placement") },
+                                onClick = { iconPlacementApp = app; appContextMenu = null }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text("Remove from Folder") },
                             onClick = { onRemoveApp(app); appContextMenu = null }
@@ -320,6 +339,17 @@ fun FolderOverlay(
                 }
             )
         }
+
+        iconPlacementApp?.let { app ->
+            IconPlacementDialog(
+                currentPlacement = app.iconPlacement,
+                onDismiss = { iconPlacementApp = null },
+                onPlacementSelected = { placement ->
+                    onAppIconPlacementChange(app, placement)
+                    iconPlacementApp = null
+                }
+            )
+        }
     }
 }
 
@@ -418,21 +448,67 @@ private fun HomeFolderAppItem(
         2 -> TextAlign.Right
         else -> TextAlign.Left
     }
+    val rowArrangement = when (effectiveAlignment) {
+        1 -> Arrangement.Center
+        2 -> Arrangement.End
+        else -> Arrangement.Start
+    }
+    val showShortcutIcon = folderApp.isSystemShortcut && settings.showShortcutIcon
+    val showShortcutIconOnRight = folderApp.iconPlacement == Constants.IconPlacement.RIGHT
 
-    Text(
-        text = folderApp.appLabel,
-        style = MaterialTheme.typography.bodyMedium.copy(
-            fontSize = effectiveFontSize,
-            fontWeight = fontWeight,
-        ),
-        color = textColor,
-        textAlign = textAlign,
-        maxLines = 2,
-        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-        modifier = modifier
-            .fillMaxSize()
-            .padding(4.dp),
-    )
+    if (showShortcutIcon) {
+        Row(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = rowArrangement,
+        ) {
+            if (!showShortcutIconOnRight) {
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = null,
+                    tint = textColor,
+                    modifier = Modifier.size(12.dp),
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+            }
+            Text(
+                text = folderApp.appLabel,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = effectiveFontSize,
+                    fontWeight = fontWeight,
+                ),
+                color = textColor,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            if (showShortcutIconOnRight) {
+                Spacer(modifier = Modifier.size(4.dp))
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = null,
+                    tint = textColor,
+                    modifier = Modifier.size(12.dp),
+                )
+            }
+        }
+    } else {
+        Text(
+            text = folderApp.appLabel,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = effectiveFontSize,
+                fontWeight = fontWeight,
+            ),
+            color = textColor,
+            textAlign = textAlign,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = modifier
+                .fillMaxSize()
+                .padding(4.dp),
+        )
+    }
 }
 
 @Composable
@@ -459,6 +535,40 @@ fun LabelAlignmentDialog(
                         },
                         onClick = { if (value != currentAlignment) onAlignmentSelected(value) },
                         enabled = value != currentAlignment,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun IconPlacementDialog(
+    currentPlacement: Int,
+    onDismiss: () -> Unit,
+    onPlacementSelected: (Int) -> Unit,
+) {
+    val options = listOf("Left" to Constants.IconPlacement.LEFT, "Right" to Constants.IconPlacement.RIGHT)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Change Icon Placement") },
+        text = {
+            Column {
+                options.forEach { (label, value) ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = if (value == currentPlacement) "$label (current)" else label,
+                                color = if (value == currentPlacement)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                else MaterialTheme.colorScheme.onSurface,
+                            )
+                        },
+                        onClick = { if (value != currentPlacement) onPlacementSelected(value) },
+                        enabled = value != currentPlacement,
                     )
                 }
             }
