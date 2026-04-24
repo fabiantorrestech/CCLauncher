@@ -99,7 +99,9 @@ import app.cclauncher.ui.components.PageReduceWarningDialog
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.dialogs.ImportExportResultDialog
 import app.cclauncher.ui.dialogs.ImportValidationDialog
+import app.cclauncher.ui.dialogs.WidgetImportModeDialog
 import app.cclauncher.ui.viewmodels.ImportExportState
+import app.cclauncher.settings.WidgetImportMode
 import io.github.mlmgames.settings.core.types.Button
 import io.github.mlmgames.settings.core.SettingField
 import io.github.mlmgames.settings.core.backup.ValidationResult
@@ -449,6 +451,7 @@ fun SettingsScreen(
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var validationResult by remember { mutableStateOf<ValidationResult?>(null) }
     var showValidationDialog by remember { mutableStateOf(false) }
+    var showWidgetImportModeDialog by remember { mutableStateOf(false) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -1255,12 +1258,26 @@ fun SettingsScreen(
             validationResult = validationResult!!,
             onConfirm = {
                 showValidationDialog = false
-                pendingImportUri?.let { viewModel.importSettings(it) }
-                pendingImportUri = null
-                validationResult = null
+                showWidgetImportModeDialog = true
             },
             onDismiss = {
                 showValidationDialog = false
+                pendingImportUri = null
+                validationResult = null
+            }
+        )
+    }
+
+    if (showWidgetImportModeDialog && pendingImportUri != null) {
+        WidgetImportModeDialog(
+            onDismiss = {
+                showWidgetImportModeDialog = false
+                pendingImportUri = null
+                validationResult = null
+            },
+            onModeSelected = { importMode ->
+                showWidgetImportModeDialog = false
+                pendingImportUri?.let { viewModel.importSettings(it, importMode) }
                 pendingImportUri = null
                 validationResult = null
             }

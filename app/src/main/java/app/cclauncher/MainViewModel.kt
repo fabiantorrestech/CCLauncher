@@ -57,6 +57,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     private val REQUEST_CODE_CONFIGURE_WIDGET = WidgetConstants.REQUEST_CONFIGURE_WIDGET
     private var pendingWidgetInfo: PendingWidgetInfo? = null
+    private var pendingWidgetReplacementTarget: HomeItem.Widget? = null
 
     private val _refreshTrigger = MutableStateFlow(0)
     val refreshTrigger = _refreshTrigger.asStateFlow()
@@ -117,6 +118,8 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     private val _currentPage = MutableStateFlow(0)
     val currentPage: StateFlow<Int> = _currentPage.asStateFlow()
+    private val _widgetReplacementTarget = MutableStateFlow<HomeItem.Widget?>(null)
+    val widgetReplacementTarget: StateFlow<HomeItem.Widget?> = _widgetReplacementTarget.asStateFlow()
 
     val appWidgetManager: AppWidgetManager =  AppWidgetManager.getInstance(appContext)
 
@@ -1268,13 +1271,31 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 val widgetWidthCells = 1.coerceAtLeast(ceil(providerInfo.minWidth.toDouble() / cellWidthDp).toInt())
                 val widgetHeightCells = 1.coerceAtLeast(ceil(providerInfo.minHeight.toDouble() / cellHeightDp).toInt())
 
-                var targetPage = _currentPage.value
-                var nextPos = findNextAvailableGridPosition(currentLayout, widgetWidthCells, widgetHeightCells, targetPage)
+                val replacementTarget = pendingWidgetReplacementTarget
+                val layoutWithoutReplacement = replacementTarget?.let { target ->
+                    currentLayout.copy(items = currentLayout.items.filterNot { it.id == target.id })
+                } ?: currentLayout
+
+                var targetPage = replacementTarget?.page ?: _currentPage.value
+                var nextPos = replacementTarget
+                    ?.takeIf {
+                        validatePlacement(
+                            layout = layoutWithoutReplacement,
+                            itemId = it.id,
+                            page = it.page,
+                            row = it.row,
+                            column = it.column,
+                            rowSpan = widgetHeightCells,
+                            columnSpan = widgetWidthCells,
+                        ) is PlacementResult.Valid
+                    }
+                    ?.let { it.row to it.column }
+                    ?: findNextAvailableGridPosition(layoutWithoutReplacement, widgetWidthCells, widgetHeightCells, targetPage)
 
                 if (nextPos == null) {
-                    for (page in 0 until currentLayout.pageCount) {
+                    for (page in 0 until layoutWithoutReplacement.pageCount) {
                         if (page != targetPage) {
-                            nextPos = findNextAvailableGridPosition(currentLayout, widgetWidthCells, widgetHeightCells, page)
+                            nextPos = findNextAvailableGridPosition(layoutWithoutReplacement, widgetWidthCells, widgetHeightCells, page)
                             if (nextPos != null) {
                                 targetPage = page
                                 break
@@ -1283,9 +1304,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     }
                 }
 
-                if (nextPos == null && currentLayout.pageCount < MAX_PAGES) {
-                    targetPage = currentLayout.pageCount
-                    val expandedLayout = currentLayout.copy(pageCount = currentLayout.pageCount + 1)
+                if (nextPos == null && layoutWithoutReplacement.pageCount < MAX_PAGES) {
+                    targetPage = layoutWithoutReplacement.pageCount
+                    val expandedLayout = layoutWithoutReplacement.copy(pageCount = layoutWithoutReplacement.pageCount + 1)
                     settingsRepository.saveHomeLayout(expandedLayout)
                     nextPos = Pair(0, 0)
                 }
@@ -1302,8 +1323,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                         rowSpan = widgetHeightCells,
                         columnSpan = widgetWidthCells
                     )
-                    val newItems = _homeLayoutState.value.items + widgetItem
-                    settingsRepository.saveHomeLayout(_homeLayoutState.value.copy(items = newItems))
+                    val newItems = layoutWithoutReplacement.items + widgetItem
+                    val newLayout = layoutWithoutReplacement.copy(items = newItems)
+                    _homeLayoutState.value = newLayout
+                    settingsRepository.saveHomeLayout(newLayout)
 
                     val options = Bundle().apply {
                         putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, providerInfo.minWidth)
@@ -1315,9 +1338,13 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     settingsRepository.triggerHomeLayoutRefresh()
 
                     _currentPage.value = targetPage
+                    pendingWidgetReplacementTarget = null
+                    _widgetReplacementTarget.value = null
                 } else {
                     snackbarManager.show("No space available for widget on any home screen page.")
                     appWidgetHost.deleteAppWidgetId(appWidgetId)
+                    pendingWidgetReplacementTarget = null
+                    _widgetReplacementTarget.value = null
                 }
             } catch (e: Exception) {
                 Log.e("WidgetDebug", "Error adding widget to layout", e)
@@ -1327,6 +1354,8 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 } catch (e2: Exception) {
                     Log.e("WidgetDebug", "Error cleaning up widget ID", e2)
                 }
+                pendingWidgetReplacementTarget = null
+                _widgetReplacementTarget.value = null
             }
         }
     }
@@ -1487,7 +1516,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 val newItems = currentLayout.items.filterNot { it.id == widgetItem.id }
                 val newLayout = currentLayout.copy(items = newItems)
                 _homeLayoutState.value = newLayout
-                appWidgetHost.deleteAppWidgetId(widgetItem.appWidgetId)
+                if (!widgetItem.isPlaceholder && widgetItem.appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                    appWidgetHost.deleteAppWidgetId(widgetItem.appWidgetId)
+                }
                 settingsRepository.saveHomeLayout(newLayout)
                 settingsRepository.triggerHomeLayoutRefresh()
             } catch (e: Exception) {
@@ -1499,6 +1530,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     fun requestWidgetReconfigure(widgetItem: HomeItem.Widget) {
         viewModelScope.launch {
+            if (widgetItem.isPlaceholder) {
+                snackbarManager.show("Placeholder widgets cannot be configured.")
+                return@launch
+            }
             val providerInfo = getAppWidgetInfo(widgetItem.packageName, widgetItem.providerClassName)
             if (providerInfo?.configure != null) {
                 emitEvent(UiEvent.ConfigureWidget(widgetItem.appWidgetId))
@@ -1506,6 +1541,19 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 snackbarManager.show("This widget cannot be reconfigured.")
             }
         }
+    }
+
+    fun startPlaceholderWidgetReplacement(widgetItem: HomeItem.Widget) {
+        pendingWidgetReplacementTarget = widgetItem
+        _widgetReplacementTarget.value = widgetItem
+        viewModelScope.launch {
+            emitEvent(UiEvent.NavigateToWidgetPicker)
+        }
+    }
+
+    fun cancelPlaceholderWidgetReplacement() {
+        pendingWidgetReplacementTarget = null
+        _widgetReplacementTarget.value = null
     }
 
     private fun getAppWidgetInfo(packageName: String, className: String): android.appwidget.AppWidgetProviderInfo? {
@@ -1576,6 +1624,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             _homeLayoutState.value = newLayout
             settingsRepository.saveHomeLayout(newLayout)
             settingsRepository.triggerHomeLayoutRefresh()
+
+            if (widgetItem.isPlaceholder || widgetItem.appWidgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+                return@launch
+            }
 
             // Update options
             val screenWidthDp = getScreenDimensions(context = appContext).first
@@ -1650,6 +1702,8 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     Log.w("ViewModelWidget", "Widget configuration cancelled/failed for ID $widgetId")
                     appWidgetHost.deleteAppWidgetId(widgetId)
                     snackbarManager.show("Widget configuration cancelled.")
+                    pendingWidgetReplacementTarget = null
+                    _widgetReplacementTarget.value = null
                 }
             }
             pendingWidgetInfo = null
@@ -2177,7 +2231,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                         }
 
                         if (!placed) {
-                            if (item is HomeItem.Widget) {
+                            if (item is HomeItem.Widget && !item.isPlaceholder) {
                                 removedWidgetIds.add(item.appWidgetId)
                             }
                             snackbarManager.show("Some items could not be relocated and were removed")

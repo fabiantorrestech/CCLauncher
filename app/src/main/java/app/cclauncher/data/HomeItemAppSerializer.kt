@@ -143,6 +143,12 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
         element<Int>("appWidgetId")
         element<String>("packageName")
         element<String>("providerClassName")
+        element<Boolean>("isPlaceholder")
+        element<String>("appName")
+        element<String>("widgetName")
+        element<Int>("intendedColumnSpan")
+        element<Int>("intendedRowSpan")
+        element<Int>("sourceDensityDpi")
         element<Int>("row")
         element<Int>("column")
         element<Int>("rowSpan")
@@ -156,10 +162,16 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
             encodeIntElement(descriptor, 2, value.appWidgetId)
             encodeStringElement(descriptor, 3, value.packageName)
             encodeStringElement(descriptor, 4, value.providerClassName)
-            encodeIntElement(descriptor, 5, value.row)
-            encodeIntElement(descriptor, 6, value.column)
-            encodeIntElement(descriptor, 7, value.rowSpan)
-            encodeIntElement(descriptor, 8, value.columnSpan)
+            encodeBooleanElement(descriptor, 5, value.isPlaceholder)
+            encodeStringElement(descriptor, 6, value.appName)
+            encodeStringElement(descriptor, 7, value.widgetName)
+            encodeIntElement(descriptor, 8, value.intendedColumnSpan)
+            encodeIntElement(descriptor, 9, value.intendedRowSpan)
+            encodeIntElement(descriptor, 10, value.sourceDensityDpi)
+            encodeIntElement(descriptor, 11, value.row)
+            encodeIntElement(descriptor, 12, value.column)
+            encodeIntElement(descriptor, 13, value.rowSpan)
+            encodeIntElement(descriptor, 14, value.columnSpan)
         }
     }
 
@@ -169,6 +181,12 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
         var appWidgetId = -1
         var packageName = ""
         var providerClassName = ""
+        var isPlaceholder = false
+        var appName = ""
+        var widgetName = ""
+        var intendedColumnSpan = 0
+        var intendedRowSpan = 0
+        var sourceDensityDpi = 0
         var row = 0
         var column = 0
         var rowSpan = 1
@@ -182,10 +200,16 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
                     2 -> appWidgetId = decodeIntElement(descriptor, index)
                     3 -> packageName = decodeStringElement(descriptor, index)
                     4 -> providerClassName = decodeStringElement(descriptor, index)
-                    5 -> row = decodeIntElement(descriptor, index)
-                    6 -> column = decodeIntElement(descriptor, index)
-                    7 -> rowSpan = decodeIntElement(descriptor, index)
-                    8 -> columnSpan = decodeIntElement(descriptor, index)
+                    5 -> isPlaceholder = decodeBooleanElement(descriptor, index)
+                    6 -> appName = decodeStringElement(descriptor, index)
+                    7 -> widgetName = decodeStringElement(descriptor, index)
+                    8 -> intendedColumnSpan = decodeIntElement(descriptor, index)
+                    9 -> intendedRowSpan = decodeIntElement(descriptor, index)
+                    10 -> sourceDensityDpi = decodeIntElement(descriptor, index)
+                    11 -> row = decodeIntElement(descriptor, index)
+                    12 -> column = decodeIntElement(descriptor, index)
+                    13 -> rowSpan = decodeIntElement(descriptor, index)
+                    14 -> columnSpan = decodeIntElement(descriptor, index)
                     CompositeDecoder.DECODE_DONE -> break
                     else -> { /* Same as above */ }
                 }
@@ -198,6 +222,12 @@ object HomeItemWidgetSerializer : KSerializer<HomeItem.Widget> {
             appWidgetId = appWidgetId,
             packageName = packageName,
             providerClassName = providerClassName,
+            isPlaceholder = isPlaceholder,
+            appName = appName,
+            widgetName = widgetName,
+            intendedColumnSpan = intendedColumnSpan,
+            intendedRowSpan = intendedRowSpan,
+            sourceDensityDpi = sourceDensityDpi,
             row = row,
             column = column,
             rowSpan = rowSpan,

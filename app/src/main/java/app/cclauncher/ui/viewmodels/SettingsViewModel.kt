@@ -7,6 +7,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppSettings
+import app.cclauncher.settings.WidgetImportMode
 import app.cclauncher.ui.UiEvent
 import io.github.mlmgames.settings.core.backup.ImportResult
 import io.github.mlmgames.settings.core.backup.ValidationResult
@@ -174,11 +175,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun importSettings(uri: Uri) {
+    fun importSettings(uri: Uri, widgetImportMode: WidgetImportMode = WidgetImportMode.WIDGETS) {
         viewModelScope.launch {
             _importExportState.value = ImportExportState.Loading
 
-            when (val result = settingsRepository.importSettingsFromUri(uri)) {
+            when (val result = settingsRepository.importSettingsFromUri(uri, widgetImportMode)) {
                 is ImportResult.Success -> {
                     _importExportState.value = ImportExportState.ImportSuccess(
                         appliedCount = result.appliedCount,

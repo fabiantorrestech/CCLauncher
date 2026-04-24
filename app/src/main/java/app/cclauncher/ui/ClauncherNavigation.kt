@@ -310,6 +310,7 @@ fun CLauncherNavigation(
                         popToHome()
                     },
                     onDismiss = {
+                        viewModel.cancelPlaceholderWidgetReplacement()
                         if (backStack.lastOrNull() == LauncherDestination.WidgetPicker) {
                             backStack.removeAt(backStack.lastIndex)
                         } else {

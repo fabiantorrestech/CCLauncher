@@ -1,6 +1,8 @@
 package app.cclauncher.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.Uri
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
@@ -14,6 +16,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,10 +40,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -105,6 +110,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -196,6 +202,8 @@ fun HomeScreen(
     var showAppContextMenu by remember { mutableStateOf<HomeItem.App?>(null) }
     var showWidgetContextMenu by remember { mutableStateOf<HomeItem.Widget?>(null) }
     var showFolderContextMenu by remember { mutableStateOf<HomeItem.Folder?>(null) }
+    var showPlaceholderWidgetActions by remember { mutableStateOf<HomeItem.Widget?>(null) }
+    var showPlaceholderWidgetDetails by remember { mutableStateOf<HomeItem.Widget?>(null) }
     var resizeDialogItem by remember { mutableStateOf<HomeItem?>(null) }
     var openFolderId by remember { mutableStateOf<String?>(null) }
     var pendingHomeAppFontItem by remember { mutableStateOf<HomeItem.App?>(null) }
@@ -366,6 +374,7 @@ fun HomeScreen(
                 },
                 onAppLongPress = { item -> showAppContextMenu = item },
                 onWidgetLongPress = { item -> showWidgetContextMenu = item },
+                onPlaceholderWidgetClick = { item -> showPlaceholderWidgetActions = item },
                 onFolderClick = { folder -> openFolderId = folder.id },
                 onFolderLongPress = { folder -> showFolderContextMenu = folder },
                 onEmptyLongPress = { onNavigateToSettings() },
@@ -500,7 +509,6 @@ fun HomeScreen(
                     pageCount = homeLayoutState.pageCount,
                     onDismiss = { showWidgetContextMenu = null },
                     onRemove = { widget ->
-                        appWidgetHost.deleteAppWidgetId(widget.appWidgetId)
                         viewModel.removeWidget(widget)
                         showWidgetContextMenu = null
                     },
@@ -512,10 +520,19 @@ fun HomeScreen(
                         viewModel.requestWidgetReconfigure(widget)
                         showWidgetContextMenu = null
                     },
+                    onCopyDetails = { widget ->
+                        copyWidgetDetailsToClipboard(context, widget)
+                        context.showToast("Widget details copied")
+                        showWidgetContextMenu = null
+                    },
                     onMove = { widget ->
                         widgetBeingMoved = widget
                         showWidgetContextMenu = null
-                        context.showToast("Tap where you want to move the widget", Toast.LENGTH_SHORT)
+                        context.showToast(
+                            if (widget.isPlaceholder) "Tap where you want to move the placeholder widget"
+                            else "Tap where you want to move the widget",
+                            Toast.LENGTH_SHORT
+                        )
                     },
                     onMoveToPage = { widget, targetPage ->
                         viewModel.moveItemToPage(widget, targetPage)
@@ -529,6 +546,53 @@ fun HomeScreen(
                     },
                 )
             }
+        }
+
+        showPlaceholderWidgetActions?.let { widgetItem ->
+            AlertDialog(
+                onDismissRequest = { showPlaceholderWidgetActions = null },
+                title = { Text(widgetItem.widgetName.ifBlank { "Widget Placeholder" }) },
+                text = {
+                    Column {
+                        Text(widgetItem.placeholderDisplayText(includeProviderClassName = false))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        ContextMenuItemRow(
+                            text = "See details of widget...",
+                            icon = Icons.Default.Info,
+                            onClick = {
+                                showPlaceholderWidgetDetails = widgetItem
+                                showPlaceholderWidgetActions = null
+                            }
+                        )
+                        ContextMenuItemRow(
+                            text = "Open widgets",
+                            icon = Icons.Default.Search,
+                            onClick = {
+                                viewModel.startPlaceholderWidgetReplacement(widgetItem)
+                                showPlaceholderWidgetActions = null
+                            }
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPlaceholderWidgetActions = null }) {
+                        Text("Close")
+                    }
+                }
+            )
+        }
+
+        showPlaceholderWidgetDetails?.let { widgetItem ->
+            AlertDialog(
+                onDismissRequest = { showPlaceholderWidgetDetails = null },
+                title = { Text(widgetItem.widgetName.ifBlank { "Widget Details" }) },
+                text = { Text(widgetItem.placeholderDisplayText()) },
+                confirmButton = {
+                    TextButton(onClick = { showPlaceholderWidgetDetails = null }) {
+                        Text("Close")
+                    }
+                }
+            )
         }
 
         // Folder context menu
@@ -600,19 +664,21 @@ fun HomeScreen(
             onResize = { item, newRowSpan, newColSpan ->
                 when (item) {
                     is HomeItem.Widget -> {
-                        val screenDimensions = getScreenDimensions(context)
-                        val cellWidth = screenDimensions.first / homeLayoutState.columns
-                        val cellHeight = screenDimensions.second / homeLayoutState.rows
-                        val widgetWidthDp = (cellWidth * newColSpan)
-                        val widgetHeightDp = (cellHeight * newRowSpan)
+                        if (!item.isPlaceholder) {
+                            val screenDimensions = getScreenDimensions(context)
+                            val cellWidth = screenDimensions.first / homeLayoutState.columns
+                            val cellHeight = screenDimensions.second / homeLayoutState.rows
+                            val widgetWidthDp = (cellWidth * newColSpan)
+                            val widgetHeightDp = (cellHeight * newRowSpan)
 
-                        val options = Bundle().apply {
-                            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, widgetWidthDp)
-                            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, widgetWidthDp)
-                            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, widgetHeightDp)
-                            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, widgetHeightDp)
+                            val options = Bundle().apply {
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, widgetWidthDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, widgetWidthDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, widgetHeightDp)
+                                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, widgetHeightDp)
+                            }
+                            viewModel.appWidgetManager.updateAppWidgetOptions(item.appWidgetId, options)
                         }
-                        viewModel.appWidgetManager.updateAppWidgetOptions(item.appWidgetId, options)
                         viewModel.resizeWidget(item, newRowSpan, newColSpan)
                     }
                     is HomeItem.App -> {
@@ -706,6 +772,7 @@ private fun HomeScreenPage(
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
     onWidgetLongPress: (HomeItem.Widget) -> Unit,
+    onPlaceholderWidgetClick: (HomeItem.Widget) -> Unit,
     onFolderClick: (HomeItem.Folder) -> Unit,
     onFolderLongPress: (HomeItem.Folder) -> Unit,
     onEmptyLongPress: () -> Unit,
@@ -782,6 +849,11 @@ private fun HomeScreenPage(
                                 item?.let { onMoveToPosition(it, gridPosition.first, gridPosition.second) }
                             }
                         } else {
+                            val widget = findWidgetAtPosition(homeLayout, offset, size, page)
+                            if (widget != null && widget.isPlaceholder) {
+                                onPlaceholderWidgetClick(widget)
+                                return@detectTapGestures
+                            }
                             val folder = findFolderAtPosition(homeLayout, offset, size, page)
                             if (folder != null) {
                                 onFolderClick(folder)
@@ -802,6 +874,9 @@ private fun HomeScreenPage(
             onAppClick = onAppClick,
             onAppLongPress = { app -> if (isMoving) onCancelMovement() else onAppLongPress(app) },
             onWidgetLongPress = onWidgetLongPress,
+            onPlaceholderWidgetClick = { widget ->
+                if (isMoving) onCancelMovement() else onPlaceholderWidgetClick(widget)
+            },
             onFolderClick = onFolderClick,
             onFolderLongPress = { folder -> if (isMoving) onCancelMovement() else onFolderLongPress(folder) },
         )
@@ -845,6 +920,7 @@ private fun HomeScreenContent(
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
     onWidgetLongPress: (HomeItem.Widget) -> Unit,
+    onPlaceholderWidgetClick: (HomeItem.Widget) -> Unit,
     onFolderClick: (HomeItem.Folder) -> Unit,
     onFolderLongPress: (HomeItem.Folder) -> Unit,
 ) {
@@ -919,40 +995,49 @@ private fun HomeScreenContent(
                             itemModifier.padding(2.dp)
                         }
 
-                        val providerInfo = remember(item.packageName, item.providerClassName) {
-                            widgetManager.installedProviders.find {
-                                it.provider.packageName == item.packageName &&
-                                        it.provider.className == item.providerClassName
-                            }
-                        }
-
-                        if (providerInfo != null) {
-                            val sizeData = remember(item.columnSpan, item.rowSpan, cellWidth, cellHeight, density) {
-                                with(density) {
-                                    val wDp = cellWidth * item.columnSpan
-                                    val hDp = cellHeight * item.rowSpan
-                                    WidgetSizeData(
-                                        width = wDp.toPx().roundToInt(),
-                                        height = hDp.toPx().roundToInt(),
-                                        minWidthDp = wDp,
-                                        maxWidthDp = wDp,
-                                        minHeightDp = hDp,
-                                        maxHeightDp = hDp
-                                    )
+                        if (item.isPlaceholder) {
+                            PlaceholderWidgetCard(
+                                modifier = widgetModifier,
+                                widgetItem = item,
+                                onClick = { onPlaceholderWidgetClick(item) },
+                                onLongClick = { onWidgetLongPress(item) }
+                            )
+                        } else {
+                            val providerInfo = remember(item.packageName, item.providerClassName) {
+                                widgetManager.installedProviders.find {
+                                    it.provider.packageName == item.packageName &&
+                                            it.provider.className == item.providerClassName
                                 }
                             }
 
-                            WidgetHostViewContainer(
-                                modifier = widgetModifier,
-                                appWidgetId = item.appWidgetId,
-                                providerInfo = providerInfo,
-                                appWidgetHost = appWidgetHost,
-                                widgetSizeData = sizeData,
-                                onLongPress = { onWidgetLongPress(item) }
-                            )
-                        } else {
-                            Box(itemModifier)
-                            Log.w("HomeScreen", "Provider not found for widget ID ${item.appWidgetId}")
+                            if (providerInfo != null) {
+                                val sizeData = remember(item.columnSpan, item.rowSpan, cellWidth, cellHeight, density) {
+                                    with(density) {
+                                        val wDp = cellWidth * item.columnSpan
+                                        val hDp = cellHeight * item.rowSpan
+                                        WidgetSizeData(
+                                            width = wDp.toPx().roundToInt(),
+                                            height = hDp.toPx().roundToInt(),
+                                            minWidthDp = wDp,
+                                            maxWidthDp = wDp,
+                                            minHeightDp = hDp,
+                                            maxHeightDp = hDp
+                                        )
+                                    }
+                                }
+
+                                WidgetHostViewContainer(
+                                    modifier = widgetModifier,
+                                    appWidgetId = item.appWidgetId,
+                                    providerInfo = providerInfo,
+                                    appWidgetHost = appWidgetHost,
+                                    widgetSizeData = sizeData,
+                                    onLongPress = { onWidgetLongPress(item) }
+                                )
+                            } else {
+                                Box(itemModifier)
+                                Log.w("HomeScreen", "Provider not found for widget ID ${item.appWidgetId}")
+                            }
                         }
                     }
 
@@ -1024,6 +1109,7 @@ fun WidgetContextMenu(
     onRemove: (HomeItem.Widget) -> Unit,
     onResize: (HomeItem.Widget) -> Unit,
     onConfigure: (HomeItem.Widget) -> Unit,
+    onCopyDetails: (HomeItem.Widget) -> Unit,
     onMove: (HomeItem.Widget) -> Unit,
     onMoveToPage: (HomeItem.Widget, Int) -> Unit,
     onNavigateToSettings: () -> Unit = {},
@@ -1040,7 +1126,7 @@ fun WidgetContextMenu(
                     it.provider.className == widgetItem.providerClassName
         }
     }
-    val canReconfigure = providerInfo?.configure != null
+    val canReconfigure = !widgetItem.isPlaceholder && providerInfo?.configure != null
 
     var showPageSelector by remember { mutableStateOf(false) }
 
@@ -1076,34 +1162,47 @@ fun WidgetContextMenu(
             text = {
                 Column {
                     if (isBeingMoved) {
-                        DropdownMenuItem(
-                            text = { Text("Cancel Move") },
+                        ContextMenuItemRow(
+                            text = "Cancel Move",
+                            icon = Icons.Default.Edit,
                             onClick = { onCancelMove(); onDismiss() }
                         )
                     } else {
-                        DropdownMenuItem(
-                            text = { Text("Move") },
+                        ContextMenuItemRow(
+                            text = "Move",
+                            icon = Icons.Default.OpenWith,
                             onClick = { onMove(widgetItem); onDismiss() }
                         )
                     }
                     if (!isBeingMoved && (pageCount > 1 || pageCount < MAX_PAGES)) {
-                        DropdownMenuItem(
-                            text = { Text("Move to page...") },
+                        ContextMenuItemRow(
+                            text = "Move to page...",
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
                             onClick = { showPageSelector = true }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Resize") },
+                    ContextMenuItemRow(
+                        text = "Resize",
+                        icon = Icons.Default.AspectRatio,
                         onClick = { onResize(widgetItem); onDismiss() }
                     )
                     if (canReconfigure) {
-                        DropdownMenuItem(
-                            text = { Text("Configure") },
+                        ContextMenuItemRow(
+                            text = "Configure",
+                            icon = Icons.Default.Settings,
                             onClick = { onConfigure(widgetItem); onDismiss() }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Remove") },
+                    if (widgetItem.isPlaceholder) {
+                        ContextMenuItemRow(
+                            text = "Copy Details",
+                            icon = Icons.Default.ContentCopy,
+                            onClick = { onCopyDetails(widgetItem); onDismiss() }
+                        )
+                    }
+                    ContextMenuItemRow(
+                        text = "Remove",
+                        icon = Icons.Default.Delete,
                         onClick = { onRemove(widgetItem); onDismiss() }
                     )
                 }
@@ -1113,6 +1212,50 @@ fun WidgetContextMenu(
             }
         )
     }
+}
+
+@Composable
+private fun PlaceholderWidgetCard(
+    modifier: Modifier,
+    widgetItem: HomeItem.Widget,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val lineCount = when {
+        widgetItem.rowSpan >= 3 || widgetItem.columnSpan >= 3 -> 3
+        widgetItem.rowSpan >= 2 || widgetItem.columnSpan >= 2 -> 2
+        else -> 1
+    }
+    val displayText = if (lineCount <= 1) {
+        "..."
+    } else {
+        widgetItem.placeholderPrimaryLines().joinToString("\n")
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+            .padding(12.dp)
+    ) {
+        Text(
+            text = displayText,
+            maxLines = lineCount,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun copyWidgetDetailsToClipboard(context: android.content.Context, widget: HomeItem.Widget) {
+    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("Widget Details", widget.placeholderDisplayText())
+    clipboard.setPrimaryClip(clip)
 }
 
 @Composable

@@ -1,11 +1,13 @@
 package app.cclauncher.settings
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.provider.OpenableColumns
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import app.cclauncher.data.HomeLayout
+import app.cclauncher.data.HomeItem
 import app.cclauncher.helper.AppTagStorage
 import app.cclauncher.helper.AppTagUtils
 import io.github.mlmgames.settings.core.SettingsRepository
@@ -22,6 +24,11 @@ import org.koin.core.component.KoinComponent
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.time.Clock
+
+enum class WidgetImportMode {
+    PLACEHOLDERS,
+    WIDGETS,
+}
 
 class AppSettingsRepository(private val context: Context): KoinComponent {
 
@@ -481,7 +488,10 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         }
     }
 
-    suspend fun importSettingsFromUri(uri: Uri): ImportResult {
+    suspend fun importSettingsFromUri(
+        uri: Uri,
+        widgetImportMode: WidgetImportMode = WidgetImportMode.WIDGETS
+    ): ImportResult {
         return try {
             val jsonString = context.contentResolver.openInputStream(uri)?.use { input ->
                 input.bufferedReader().readText()
@@ -489,7 +499,11 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
                 io.github.mlmgames.settings.core.backup.ImportError.PARSE_ERROR,
                 "Could not read file"
             )
-            importSettings(jsonString)
+            val result = importSettings(jsonString)
+            if (result is ImportResult.Success && widgetImportMode == WidgetImportMode.PLACEHOLDERS) {
+                convertImportedWidgetsToPlaceholders()
+            }
+            result
         } catch (e: Exception) {
             Log.e("SettingsRepo", "Failed to import settings from URI", e)
             ImportResult.Error(
@@ -497,5 +511,69 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
                 e.message ?: "Unknown error"
             )
         }
+    }
+
+    private suspend fun convertImportedWidgetsToPlaceholders() {
+        val currentLayout = getHomeLayout().first()
+        val currentDensity = context.resources.displayMetrics.densityDpi
+        val widgetManager = android.appwidget.AppWidgetManager.getInstance(context)
+        val pm = context.packageManager
+
+        val updatedItems = currentLayout.items.map { item ->
+            if (item is HomeItem.Widget && !item.isPlaceholder) {
+                val providerInfo = widgetManager.installedProviders.find { info ->
+                    info.provider.packageName == item.packageName &&
+                        info.provider.className == item.providerClassName
+                }
+
+                item.copy(
+                    appWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID,
+                    isPlaceholder = true,
+                    appName = resolveAppName(pm, item.packageName),
+                    widgetName = providerInfo?.loadLabel(pm).orEmpty(),
+                    intendedColumnSpan = providerInfo?.let {
+                        estimateWidgetColumnSpan(it, currentLayout.columns)
+                    } ?: item.columnSpan,
+                    intendedRowSpan = providerInfo?.let {
+                        estimateWidgetRowSpan(it, currentLayout.rows)
+                    } ?: item.rowSpan,
+                    sourceDensityDpi = currentDensity,
+                )
+            } else {
+                item
+            }
+        }
+
+        if (updatedItems != currentLayout.items) {
+            saveHomeLayout(currentLayout.copy(items = updatedItems))
+            triggerHomeLayoutRefresh()
+        }
+    }
+
+    private fun resolveAppName(pm: PackageManager, packageName: String): String {
+        return try {
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            pm.getApplicationLabel(appInfo).toString()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun estimateWidgetColumnSpan(
+        info: android.appwidget.AppWidgetProviderInfo,
+        layoutColumns: Int
+    ): Int {
+        val screenWidthDp = context.resources.configuration.screenWidthDp.takeIf { it > 0 } ?: 1
+        val cellWidthDp = screenWidthDp.toFloat() / layoutColumns.coerceAtLeast(1)
+        return 1.coerceAtLeast(kotlin.math.ceil(info.minWidth.toDouble() / cellWidthDp).toInt())
+    }
+
+    private fun estimateWidgetRowSpan(
+        info: android.appwidget.AppWidgetProviderInfo,
+        layoutRows: Int
+    ): Int {
+        val screenHeightDp = context.resources.configuration.screenHeightDp.takeIf { it > 0 } ?: 1
+        val cellHeightDp = screenHeightDp.toFloat() / layoutRows.coerceAtLeast(1)
+        return 1.coerceAtLeast(kotlin.math.ceil(info.minHeight.toDouble() / cellHeightDp).toInt())
     }
 }

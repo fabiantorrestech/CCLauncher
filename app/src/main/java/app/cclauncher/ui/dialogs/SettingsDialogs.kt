@@ -3,12 +3,15 @@ package app.cclauncher.ui.dialogs
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import app.cclauncher.settings.WidgetImportMode
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.viewmodels.ImportExportState
 import io.github.mlmgames.settings.core.backup.ValidationResult
@@ -286,6 +289,72 @@ fun ImportValidationDialog(
                 Text("Import")
             }
         },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun WidgetImportModeDialog(
+    onDismiss: () -> Unit,
+    onModeSelected: (WidgetImportMode) -> Unit,
+) {
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    if (showInfoDialog) {
+        AlertDialog(
+            onDismissRequest = { showInfoDialog = false },
+            title = { Text("Widget Import Info") },
+            text = {
+                Text(
+                    "Importing Android widgets from a backup can be unreliable, as sometimes the widgets spawn in a zombie or dead state where they are physically there, but not functioning as they should."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showInfoDialog = false }) {
+                    Text("Back")
+                }
+            }
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text("Import Widgets", modifier = Modifier.align(Alignment.CenterStart))
+                IconButton(
+                    onClick = { showInfoDialog = true },
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Widget import info"
+                    )
+                }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Choose how CCLauncher should import widgets from this backup.")
+                Button(
+                    onClick = { onModeSelected(WidgetImportMode.PLACEHOLDERS) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Import with placeholder widgets (Recommended)")
+                }
+                OutlinedButton(
+                    onClick = { onModeSelected(WidgetImportMode.WIDGETS) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Import with Widgets")
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")

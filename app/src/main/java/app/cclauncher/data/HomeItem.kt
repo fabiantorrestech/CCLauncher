@@ -37,13 +37,55 @@ sealed class HomeItem {
         val providerInfo: android.appwidget.AppWidgetProviderInfo? = null,
         val packageName: String,
         val providerClassName: String,
+        val isPlaceholder: Boolean = false,
+        val appName: String = "",
+        val widgetName: String = "",
+        val intendedColumnSpan: Int = 0,
+        val intendedRowSpan: Int = 0,
+        val sourceDensityDpi: Int = 0,
         override val id: String = "widget_$appWidgetId",
         override val page: Int = 0,
         override val row: Int,
         override val column: Int,
         override val rowSpan: Int,
         override val columnSpan: Int,
-    ) : HomeItem()
+    ) : HomeItem() {
+        fun placeholderPrimaryLines(): List<String> {
+            val appDisplay = listOf(packageName, appName.takeIf { it.isNotBlank() })
+                .filterNotNull()
+                .joinToString(" • ")
+                .ifBlank { packageName.ifBlank { "Unknown app" } }
+            val widgetDisplay = buildString {
+                append(widgetName.ifBlank { providerClassName.substringAfterLast('.') })
+                val intendedSize = intendedSizeLabel()
+                val density = sourceDensityDpi.takeIf { it > 0 }?.let { "$it dpi" }
+                val extras = listOfNotNull(intendedSize, density)
+                if (extras.isNotEmpty()) {
+                    append(" • ")
+                    append(extras.joinToString(" • "))
+                }
+            }.ifBlank { "Unknown widget" }
+
+            return listOf(
+                appDisplay,
+                widgetDisplay,
+                "Imported as ${columnSpan}x${rowSpan}"
+            )
+        }
+
+        fun placeholderDisplayText(includeProviderClassName: Boolean = true): String {
+            val lines = placeholderPrimaryLines().map { "• $it" }.toMutableList()
+            if (includeProviderClassName && providerClassName.isNotBlank()) {
+                lines += "• Provider: $providerClassName"
+            }
+            return lines.joinToString("\n")
+        }
+
+        fun intendedSizeLabel(): String? {
+            if (intendedColumnSpan <= 0 || intendedRowSpan <= 0) return null
+            return "${intendedColumnSpan}x${intendedRowSpan} default"
+        }
+    }
 
     @Serializable(with = HomeItemFolderSerializer::class)
     data class Folder(
