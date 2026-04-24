@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -248,6 +250,9 @@ fun AppDrawerScreen(
     } else {
         settings.showAppNames
     }
+
+    val belowNameThreshold = settings.showAppNamesInSearchAfter > 0 &&
+        searchQuery.length < settings.showAppNamesInSearchAfter
 
     LaunchedEffect(searchQuery) {
         hasAutoSelected = false
@@ -455,7 +460,7 @@ fun AppDrawerScreen(
                     // on the inner box has a proper, fully-sized Box scope to work against.
                     Box(modifier = Modifier.fillMaxSize()) {
                         Box(
-                            modifier = if (isBottomSearch) {
+                            modifier = (if (isBottomSearch) {
                                 // heightIn on the *box* (not the LazyColumn) ensures fillMaxSize
                                 // on the LazyColumn expands the box to exactly the capped height,
                                 // so align(BottomStart) pins the list just above the search bar.
@@ -468,7 +473,7 @@ fun AppDrawerScreen(
                                     .heightIn(max = maxListHeight)
                             } else {
                                 Modifier.fillMaxSize()
-                            }
+                            }).alpha(if (belowNameThreshold) 0f else 1f)
                         ) {
                         // Reserve space on the scrollbar side so content doesn't sit
                         // flush against the scrollbar thumb / touch target.
@@ -543,7 +548,7 @@ fun AppDrawerScreen(
                             }
                         }
 
-                        if (showScrollbar && displayList.size > 0) {
+                        if (showScrollbar && displayList.size > 0 && !belowNameThreshold) {
                             ScrollbarIndicator(
                                 listState = scrollState,
                                 totalItems = displayList.size,
@@ -555,6 +560,19 @@ fun AppDrawerScreen(
                             )
                         }
                         } // inner Box
+
+                        // Transparent overlay while below name-reveal threshold.
+                        // Intercepts taps so invisible list items can't be accidentally triggered.
+                        // Reserved for future content (hints, animations, etc.).
+                        if (belowNameThreshold) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures { }
+                                    }
+                            )
+                        }
                     } // outer Box
                 }
             }
