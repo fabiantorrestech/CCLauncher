@@ -706,13 +706,28 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 snackbarManager.show("Cannot place app there.")
                 return@launch
             }
+            var replaced = false
             val updatedApps = folder.apps.map {
-                if (it == folderApp) it.copy(row = newRow, column = newColumn) else it
+                if (!replaced && isSameFolderAppEntry(it, folderApp)) {
+                    replaced = true
+                    it.copy(row = newRow, column = newColumn)
+                } else {
+                    it
+                }
             }
             val updatedFolder = folder.copy(apps = updatedApps)
             val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
         }
+    }
+
+    fun canMoveFolderApp(folderId: String, folderApp: FolderApp, newRow: Int, newColumn: Int): Boolean {
+        val folder = _homeLayoutState.value.items
+            .filterIsInstance<HomeItem.Folder>()
+            .find { it.id == folderId }
+            ?: return false
+
+        return validateFolderPlacement(folder, folderApp, newRow, newColumn, folderApp.rowSpan, folderApp.columnSpan)
     }
 
     fun renameFolder(folderId: String, newTitle: String) {
@@ -1060,11 +1075,25 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         return null
     }
 
+    private fun isSameFolderAppEntry(left: FolderApp, right: FolderApp): Boolean {
+        return left.appPackage == right.appPackage &&
+            left.activityClassName == right.activityClassName &&
+            left.userString == right.userString &&
+            left.appLabel == right.appLabel &&
+            left.isSystemShortcut == right.isSystemShortcut &&
+            left.systemShortcutId == right.systemShortcutId &&
+            left.systemShortcutPackage == right.systemShortcutPackage
+    }
+
     private fun validateFolderPlacement(folder: HomeItem.Folder, movingApp: FolderApp, newRow: Int, newCol: Int, rowSpan: Int, colSpan: Int): Boolean {
         if (newRow < 0 || newCol < 0) return false
         if (newRow + rowSpan > folder.gridRows || newCol + colSpan > folder.gridColumns) return false
+        var skippedMovingApp = false
         val hasOverlap = folder.apps.any { app ->
-            if (app == movingApp) return@any false
+            if (!skippedMovingApp && isSameFolderAppEntry(app, movingApp)) {
+                skippedMovingApp = true
+                return@any false
+            }
             !(newRow >= app.row + app.rowSpan || newRow + rowSpan <= app.row ||
                 newCol >= app.column + app.columnSpan || newCol + colSpan <= app.column)
         }
@@ -1508,6 +1537,18 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
             settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
         }
+    }
+
+    fun canMoveHomeItem(item: HomeItem, newRow: Int, newColumn: Int): Boolean {
+        return validatePlacement(
+            layout = _homeLayoutState.value,
+            itemId = item.id,
+            page = item.page,
+            row = newRow,
+            column = newColumn,
+            rowSpan = item.rowSpan,
+            columnSpan = item.columnSpan,
+        ) is PlacementResult.Valid
     }
 
     fun resizeWidget(widgetItem: HomeItem.Widget, newRowSpan: Int, newColSpan: Int) {

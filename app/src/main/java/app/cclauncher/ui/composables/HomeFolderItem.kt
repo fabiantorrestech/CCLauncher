@@ -90,7 +90,7 @@ fun HomeFolderItem(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(onClick, onLongClick) {
                 detectTapGestures(
                     onTap = { onClick() },
                     onLongPress = { onLongClick() }

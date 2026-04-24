@@ -61,6 +61,8 @@ import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
+import app.cclauncher.ui.components.MoveDirection
+import app.cclauncher.ui.components.MovePadOverlay
 
 @Composable
 fun FolderOverlay(
@@ -69,6 +71,7 @@ fun FolderOverlay(
     onDismiss: () -> Unit,
     onLaunchApp: (FolderApp) -> Unit,
     onMoveApp: (FolderApp, Int, Int) -> Unit,
+    canMoveApp: (FolderApp, Int, Int) -> Boolean,
     onRemoveApp: (FolderApp) -> Unit,
     onResizeApp: (FolderApp, Int, Int) -> Unit,
     onAppRename: (FolderApp, String) -> Unit = { _, _ -> },
@@ -101,6 +104,24 @@ fun FolderOverlay(
                 ?: loadFontFamily(launcherFontSettings.folderDefaultFontPath)
                 ?: loadFontFamily(launcherFontSettings.mainFontPath)
         }
+    }
+
+    fun stepPosition(row: Int, column: Int, direction: MoveDirection): Pair<Int, Int> {
+        return when (direction) {
+            MoveDirection.Up -> row - 1 to column
+            MoveDirection.Down -> row + 1 to column
+            MoveDirection.Left -> row to column - 1
+            MoveDirection.Right -> row to column + 1
+        }
+    }
+
+    fun nudgeMovingApp(direction: MoveDirection): Boolean {
+        val app = movingApp ?: return false
+        val (newRow, newColumn) = stepPosition(app.row, app.column, direction)
+        if (!canMoveApp(app, newRow, newColumn)) return false
+        onMoveApp(app, newRow, newColumn)
+        movingApp = app.copy(row = newRow, column = newColumn)
+        return true
     }
 
     BackHandler { onDismiss() }
@@ -221,6 +242,10 @@ fun FolderOverlay(
                     )
                 }
             }
+        }
+
+        if (movingApp != null) {
+            MovePadOverlay(onMove = ::nudgeMovingApp)
         }
 
         // Context menu for app inside folder

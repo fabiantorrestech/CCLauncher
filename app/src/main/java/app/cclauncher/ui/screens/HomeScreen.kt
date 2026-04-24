@@ -107,6 +107,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
@@ -121,6 +122,8 @@ import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ContextMenuItemRow
+import app.cclauncher.ui.components.MoveDirection
+import app.cclauncher.ui.components.MovePadOverlay
 import app.cclauncher.ui.composables.HomeAppItem
 import app.cclauncher.ui.composables.WidgetHostViewContainer
 import app.cclauncher.ui.composables.WidgetSizeData
@@ -260,6 +263,43 @@ fun HomeScreen(
     var appBeingMoved by remember { mutableStateOf<HomeItem.App?>(null) }
     var folderBeingMoved by remember { mutableStateOf<HomeItem.Folder?>(null) }
 
+    fun stepPosition(row: Int, column: Int, direction: MoveDirection): Pair<Int, Int> {
+        return when (direction) {
+            MoveDirection.Up -> row - 1 to column
+            MoveDirection.Down -> row + 1 to column
+            MoveDirection.Left -> row to column - 1
+            MoveDirection.Right -> row to column + 1
+        }
+    }
+
+    fun nudgeMovingHomeItem(direction: MoveDirection): Boolean {
+        widgetBeingMoved?.let { item ->
+            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
+            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            viewModel.moveWidget(item, newRow, newColumn)
+            widgetBeingMoved = item.copy(row = newRow, column = newColumn)
+            return true
+        }
+
+        appBeingMoved?.let { item ->
+            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
+            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            viewModel.moveApp(item, newRow, newColumn)
+            appBeingMoved = item.copy(row = newRow, column = newColumn)
+            return true
+        }
+
+        folderBeingMoved?.let { item ->
+            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
+            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            viewModel.moveFolder(item, newRow, newColumn)
+            folderBeingMoved = item.copy(row = newRow, column = newColumn)
+            return true
+        }
+
+        return false
+    }
+
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
@@ -376,6 +416,13 @@ fun HomeScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp)
+            )
+        }
+
+        if ((widgetBeingMoved != null || appBeingMoved != null || folderBeingMoved != null) && openFolderId == null) {
+            MovePadOverlay(
+                onMove = ::nudgeMovingHomeItem,
+                modifier = Modifier.zIndex(2f),
             )
         }
 
@@ -593,6 +640,9 @@ fun HomeScreen(
                     onMoveApp = { folderApp, newRow, newCol ->
                         viewModel.moveFolderApp(fid, folderApp, newRow, newCol)
                     },
+                    canMoveApp = { folderApp, newRow, newCol ->
+                        viewModel.canMoveFolderApp(fid, folderApp, newRow, newCol)
+                    },
                     onRemoveApp = { folderApp ->
                         viewModel.removeAppFromFolder(fid, folderApp)
                     },
@@ -753,7 +803,7 @@ private fun HomeScreenPage(
             onAppLongPress = { app -> if (isMoving) onCancelMovement() else onAppLongPress(app) },
             onWidgetLongPress = onWidgetLongPress,
             onFolderClick = onFolderClick,
-            onFolderLongPress = onFolderLongPress,
+            onFolderLongPress = { folder -> if (isMoving) onCancelMovement() else onFolderLongPress(folder) },
         )
 
         if (isMoving && settings.showMoveGridOverlay) {
