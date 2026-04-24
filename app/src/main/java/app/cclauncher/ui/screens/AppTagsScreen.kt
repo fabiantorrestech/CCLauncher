@@ -45,17 +45,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.AppModel
+import app.cclauncher.helper.AppTagKeyUtils
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.ScrollbarIndicator
 
 private data class TagEntryUiModel(
     val tag: String,
-    val apps: List<AppModel>,
+    val apps: List<AppEntryUiModel>,
 )
 
 private data class AppEntryUiModel(
-    val app: AppModel,
+    val appKey: String,
+    val app: AppModel? = null,
+    val displayLabel: String,
+    val supportingText: String? = null,
+    val isDeletedApp: Boolean = false,
     val tags: List<String>,
 )
 
@@ -69,6 +74,7 @@ fun AppTagsScreen(
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var editingApp by remember { mutableStateOf<AppModel?>(null) }
+    var editingAppKey by remember { mutableStateOf<String?>(null) }
     var tagToRename by remember { mutableStateOf<String?>(null) }
     var renameValue by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -79,39 +85,77 @@ fun AppTagsScreen(
     val normalizedQuery = remember(searchQuery) { searchQuery.trim() }
 
     val taggedApps = remember(allApps, appTags) {
-        allApps
+        val appsByKey = allApps.associateBy { it.getKey() }
+
+        val activeEntries = allApps
             .mapNotNull { app ->
                 val sortedTags = appTags[app.getKey()].orEmpty()
                     .sortedWith(String.CASE_INSENSITIVE_ORDER)
-                if (sortedTags.isEmpty()) null else AppEntryUiModel(app = app, tags = sortedTags)
+                if (sortedTags.isEmpty()) null else AppEntryUiModel(
+                    appKey = app.getKey(),
+                    app = app,
+                    displayLabel = app.appLabel,
+                    tags = sortedTags,
+                )
             }
-            .sortedBy { it.app.appLabel.lowercase() }
+
+        val retainedEntries = appTags.entries
+            .asSequence()
+            .filter { (appKey, tags) -> tags.isNotEmpty() && !appsByKey.containsKey(appKey) }
+            .mapNotNull { (appKey, tags) ->
+                val retained = AppTagKeyUtils.retainedRecordForKey(appKey) ?: return@mapNotNull null
+                AppEntryUiModel(
+                    appKey = retained.appKey,
+                    displayLabel = retained.displayLabel,
+                    supportingText = "Deleted app",
+                    isDeletedApp = retained.isDeletedApp,
+                    tags = tags.sortedWith(String.CASE_INSENSITIVE_ORDER),
+                )
+            }
+
+        (activeEntries + retainedEntries)
+            .sortedBy { it.displayLabel.lowercase() }
     }
 
     val tagEntries = remember(taggedApps) {
-        buildMap<String, MutableList<AppModel>> {
+        buildMap<String, MutableList<AppEntryUiModel>> {
             taggedApps.forEach { entry ->
                 entry.tags.forEach { tag ->
-                    getOrPut(tag) { mutableListOf() }.add(entry.app)
+                    getOrPut(tag) { mutableListOf() }.add(entry)
                 }
             }
         }
             .map { (tag, apps) ->
                 TagEntryUiModel(
                     tag = tag,
-                    apps = apps.sortedBy { it.appLabel.lowercase() }
+                    apps = apps.sortedBy { it.displayLabel.lowercase() }
                 )
             }
             .sortedBy { it.tag.lowercase() }
     }
 
-    val filteredTagEntries = remember(tagEntries, normalizedQuery) {
+    val tagEntriesWithDisplayNames = remember(tagEntries) {
+        tagEntries.map { entry ->
+            entry to entry.apps.map { appEntry ->
+                buildString {
+                    append(appEntry.displayLabel)
+                    appEntry.supportingText?.let {
+                        append(" (")
+                        append(it)
+                        append(')')
+                    }
+                }
+            }.sortedBy { it.lowercase() }
+        }
+    }
+
+    val filteredTagEntries = remember(tagEntriesWithDisplayNames, normalizedQuery) {
         if (normalizedQuery.isBlank()) {
-            tagEntries
+            tagEntriesWithDisplayNames
         } else {
-            tagEntries.filter { entry ->
+            tagEntriesWithDisplayNames.filter { (entry, displayNames) ->
                 entry.tag.contains(normalizedQuery, ignoreCase = true) ||
-                    entry.apps.any { it.appLabel.contains(normalizedQuery, ignoreCase = true) }
+                    displayNames.any { it.contains(normalizedQuery, ignoreCase = true) }
             }
         }
     }
@@ -121,7 +165,8 @@ fun AppTagsScreen(
             taggedApps
         } else {
             taggedApps.filter { entry ->
-                entry.app.appLabel.contains(normalizedQuery, ignoreCase = true) ||
+                entry.displayLabel.contains(normalizedQuery, ignoreCase = true) ||
+                    entry.supportingText.orEmpty().contains(normalizedQuery, ignoreCase = true) ||
                     entry.tags.any { it.contains(normalizedQuery, ignoreCase = true) }
             }
         }
@@ -234,7 +279,7 @@ fun AppTagsScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     if (showingTagsTab) {
-                        items(filteredTagEntries, key = { it.tag }) { entry ->
+                        items(filteredTagEntries, key = { it.first.tag }) { (entry, displayNames) ->
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -259,14 +304,14 @@ fun AppTagsScreen(
                                     }
                                 }
                                 Text(
-                                    text = entry.apps.joinToString(", ") { it.appLabel },
+                                    text = displayNames.joinToString(", "),
                                     modifier = Modifier.padding(start = 20.dp, end = 12.dp),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
                         }
                     } else {
-                        items(filteredAppEntries, key = { it.app.getKey() }) { entry ->
+                        items(filteredAppEntries, key = { it.appKey }) { entry ->
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -276,13 +321,26 @@ fun AppTagsScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = entry.app.appLabel,
+                                        text = entry.displayLabel,
                                         modifier = Modifier.weight(1f),
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    IconButton(onClick = { editingApp = entry.app }) {
+                                    IconButton(onClick = {
+                                        if (entry.app != null) {
+                                            editingApp = entry.app
+                                        } else {
+                                            editingAppKey = entry.appKey
+                                        }
+                                    }) {
                                         Icon(Icons.Default.Edit, contentDescription = "Edit app tags")
                                     }
+                                }
+                                entry.supportingText?.let { supportingText ->
+                                    Text(
+                                        text = supportingText,
+                                        modifier = Modifier.padding(start = 20.dp, end = 12.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                 }
                                 Text(
                                     text = entry.tags.joinToString(", "),
@@ -313,6 +371,19 @@ fun AppTagsScreen(
             onBack = { editingApp = null },
             onDone = { editingApp = null }
         )
+    }
+
+    editingAppKey?.let { appKey ->
+        val entry = taggedApps.firstOrNull { it.appKey == appKey }
+        if (entry != null) {
+            AppTagsEditorDialog(
+                title = "Tags for ${entry.displayLabel}",
+                initialTags = viewModel.getTagsForAppKey(appKey),
+                onSave = { viewModel.saveTagsForAppKey(appKey, it) },
+                onBack = { editingAppKey = null },
+                onDone = { editingAppKey = null }
+            )
+        }
     }
 
     tagToRename?.let { tag ->

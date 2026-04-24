@@ -1776,6 +1776,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
     fun getTagsForApp(app: AppModel): List<String> =
         _appTags.value[app.getKey()].orEmpty()
 
+    fun getTagsForAppKey(appKey: String): List<String> =
+        _appTags.value[appKey].orEmpty()
+
     fun saveTagsForApp(app: AppModel, tags: List<String>) {
         viewModelScope.launch {
             val appKey = app.getKey()
@@ -1794,6 +1797,12 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     )
                 )
             }
+        }
+    }
+
+    fun saveTagsForAppKey(appKey: String, tags: List<String>) {
+        viewModelScope.launch {
+            settingsRepository.setAppTags(appKey, tags)
         }
     }
 

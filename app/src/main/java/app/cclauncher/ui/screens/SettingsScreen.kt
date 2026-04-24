@@ -166,7 +166,6 @@ private val settingsTabs = listOf(
                     field("showIconsInPortrait"),
                     field("showIconsInLandscape"),
                     field("textSizeScale"),
-                    field("homeLabelFontPath"),
                     field("appLabelAlignment"),
                 ),
             ),
@@ -226,7 +225,6 @@ private val settingsTabs = listOf(
                 title = "Shortcuts & Typography",
                 entries = listOf(
                     field("showPinnedShortcuts"),
-                    field("appDrawerLabelFontPath"),
                     field("searchResultsUseHomeFont"),
                     field("searchResultsFontSize"),
                 ),
@@ -257,6 +255,9 @@ private val settingsTabs = listOf(
                     field("customFontPath"),
                     field("headerFontPath"),
                     field("tertiaryFontPath"),
+                    field("homeLabelFontPath"),
+                    field("folderLabelFontPath"),
+                    field("appDrawerLabelFontPath"),
                 ),
             ),
             SettingsSectionSpec(
@@ -330,7 +331,6 @@ private val settingsTabs = listOf(
                 entries = listOf(
                     field("showFolderIcon"),
                     field("folderIconPlacement"),
-                    field("folderLabelFontPath"),
                     field("folderBackgroundOpacity"),
                 ),
             ),
@@ -919,7 +919,13 @@ fun SettingsScreen(
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search settings...") },
+                            textStyle = MaterialTheme.typography.bodyLarge,
+                            placeholder = {
+                                Text(
+                                    "Search settings...",
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            },
                             singleLine = true,
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -1776,7 +1782,12 @@ private fun PreviewSettingsGeneralTab() {
                                     SettingsSection(title = "Fonts") {
                                         SettingsItem(title = "Font Weight", subtitle = "Normal", onClick = {})
                                         SettingsToggle(title = "Use System Font", isChecked = true, onCheckedChange = {})
-                                        SettingsItem(title = "Custom Font", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Main Font", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Header Font", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Tertiary Font", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Home Label Font (Default)", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "Folder Label Font (Default)", subtitle = "System default", onClick = {})
+                                        SettingsItem(title = "App Drawer Label Font (Default)", subtitle = "System default", onClick = {})
                                     }
                                 }
                                 item {

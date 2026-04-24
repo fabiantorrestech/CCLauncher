@@ -1,6 +1,7 @@
 package app.cclauncher.settings
 
 import android.content.Context
+import android.provider.OpenableColumns
 import android.net.Uri
 import android.os.Build
 import android.util.Log
@@ -179,7 +180,13 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         return try {
             val fontDir = File(context.filesDir, "fonts").apply { mkdirs() }
             val cleanHint = slotHint.replace(Regex("[^a-zA-Z0-9_]"), "_")
-            val fontFile = File(fontDir, "${cleanHint}_${java.lang.System.currentTimeMillis()}.ttf")
+            val importDir = File(fontDir, "${cleanHint}_${java.lang.System.currentTimeMillis()}").apply { mkdirs() }
+            val displayName = readDisplayName(uri)
+                ?.takeIf { it.isNotBlank() }
+                ?.substringAfterLast('/')
+                ?: "font.ttf"
+            val sanitizedName = displayName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val fontFile = File(importDir, sanitizedName)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(fontFile).use { output -> input.copyTo(output) }
             } ?: return null
@@ -194,9 +201,28 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         if (path.isBlank()) return
         try {
             val file = File(path)
-            if (file.exists()) file.delete()
+            if (file.exists()) {
+                file.delete()
+                file.parentFile
+                    ?.takeIf { it.name.startsWith("home_item_font_") || it.name.startsWith("folder_title_font_") || it.name.startsWith("folder_item_font_") || it.name.startsWith("customFontPath_") || it.name.startsWith("headerFontPath_") || it.name.startsWith("tertiaryFontPath_") || it.name.startsWith("homeLabelFontPath_") || it.name.startsWith("folderLabelFontPath_") || it.name.startsWith("appDrawerLabelFontPath_") }
+                    ?.takeIf { it.isDirectory && it.list().isNullOrEmpty() }
+                    ?.delete()
+            }
         } catch (e: Exception) {
             Log.e("SettingsRepo", "Error deleting font file: $path", e)
+        }
+    }
+
+    private fun readDisplayName(uri: Uri): String? {
+        return try {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (!cursor.moveToFirst()) return null
+                    val columnIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (columnIndex == -1) null else cursor.getString(columnIndex)
+                }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -424,6 +450,7 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
 
     // Import/Export functionality
     suspend fun exportSettings(): ExportResult {
+        // App tags are included automatically because APP_TAGS_JSON is part of AppSettingsSchema.
         return backupManager.export()
     }
 

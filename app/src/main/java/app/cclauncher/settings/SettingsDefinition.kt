@@ -251,7 +251,7 @@ data class AppSettings(
     val useSystemFont: Boolean = true,
 
     @Setting(
-        title = "Custom Font",
+        title = "Main Font",
         description = "Select the main font file for launcher UI fallback",
         category = Appearance::class,
         type = FontPicker::class,
