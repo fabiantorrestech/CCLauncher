@@ -34,7 +34,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -108,6 +118,7 @@ import app.cclauncher.helper.showToast
 import app.cclauncher.helper.withResolvedUser
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.components.AppSlider
+import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.composables.HomeAppItem
 import app.cclauncher.ui.composables.WidgetHostViewContainer
 import app.cclauncher.ui.composables.WidgetSizeData
@@ -1143,12 +1154,14 @@ fun HomeAppContextMenu(
             title = { Text("Select Font") },
             text = {
                 Column {
-                    DropdownMenuItem(
-                        text = { Text("Select Font...") },
+                    ContextMenuItemRow(
+                        text = "Select Font...",
+                        icon = Icons.Default.TextFields,
                         onClick = { onSelectFont(); onDismiss() }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Default Font") },
+                    ContextMenuItemRow(
+                        text = "Default Font",
+                        icon = Icons.Default.TextFields,
                         onClick = { onResetFont(); onDismiss() }
                     )
                 }
@@ -1163,21 +1176,25 @@ fun HomeAppContextMenu(
             title = { Text("Customize") },
             text = {
                 Column {
-                    DropdownMenuItem(
-                        text = { Text("Text Size...") },
+                    ContextMenuItemRow(
+                        text = "Text Size...",
+                        icon = Icons.Default.TextFields,
                         onClick = { showTextSizeEditor = true }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Label Alignment...") },
+                    ContextMenuItemRow(
+                        text = "Label Alignment...",
+                        icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
                         onClick = { showLabelAlignmentPicker = true }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Select Font...") },
+                    ContextMenuItemRow(
+                        text = "Select Font...",
+                        icon = Icons.Default.TextFields,
                         onClick = { showFontMenu = true }
                     )
                     if (appItem.appModel.isSystemShortcut && showShortcutIconSetting) {
-                        DropdownMenuItem(
-                            text = { Text("Change Icon Placement...") },
+                        ContextMenuItemRow(
+                            text = "Change Icon Placement...",
+                            icon = Icons.Default.SwapHoriz,
                             onClick = { showIconPlacementPicker = true }
                         )
                     }
@@ -1217,8 +1234,9 @@ fun HomeAppContextMenu(
             text = {
                 Column {
                     folders.forEach { folder ->
-                        DropdownMenuItem(
-                            text = { Text("${folder.title} (${folder.apps.size} apps)") },
+                        ContextMenuItemRow(
+                            text = "${folder.title} (${folder.apps.size} apps)",
+                            icon = Icons.Default.Folder,
                             onClick = {
                                 onAddToFolder?.invoke(folder)
                                 showFolderPicker = false
@@ -1251,36 +1269,43 @@ fun HomeAppContextMenu(
             },
             text = {
                 Column {
-                    DropdownMenuItem(
-                        text = { Text("Move") },
+                    ContextMenuItemRow(
+                        text = "Move",
+                        icon = Icons.Default.OpenWith,
                         onClick = { onMove(appItem); onDismiss() }
                     )
                     if (pageCount > 1 || pageCount < MAX_PAGES) {
-                        DropdownMenuItem(
-                            text = { Text("Move to page...") },
+                        ContextMenuItemRow(
+                            text = "Move to page...",
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
                             onClick = { showPageSelector = true }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Resize") },
+                    ContextMenuItemRow(
+                        text = "Resize",
+                        icon = Icons.Default.AspectRatio,
                         onClick = { onResize(appItem); onDismiss() }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Customize...") },
+                    ContextMenuItemRow(
+                        text = "Customize...",
+                        icon = Icons.Default.Edit,
                         onClick = { showCustomizeMenu = true }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Rename") },
+                    ContextMenuItemRow(
+                        text = "Rename",
+                        icon = Icons.Default.DriveFileRenameOutline,
                         onClick = { showRenameDialog = true }
                     )
                     if (folders.isNotEmpty() && onAddToFolder != null) {
-                        DropdownMenuItem(
-                            text = { Text("Add to Folder...") },
+                        ContextMenuItemRow(
+                            text = "Add to Folder...",
+                            icon = Icons.Default.Folder,
                             onClick = { showFolderPicker = true }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("Remove") },
+                    ContextMenuItemRow(
+                        text = "Remove",
+                        icon = Icons.Default.Delete,
                         onClick = { onRemove(appItem); onDismiss() }
                     )
                 }
@@ -1932,12 +1957,14 @@ fun FolderContextMenu(
             title = { Text("Select Font") },
             text = {
                 Column {
-                    DropdownMenuItem(
-                        text = { Text("Select Font...") },
+                    ContextMenuItemRow(
+                        text = "Select Font...",
+                        icon = Icons.Default.TextFields,
                         onClick = { onSelectFont(); onDismiss() }
                     )
-                    DropdownMenuItem(
-                        text = { Text("Default Font") },
+                    ContextMenuItemRow(
+                        text = "Default Font",
+                        icon = Icons.Default.TextFields,
                         onClick = { onResetFont(); onDismiss() }
                     )
                 }
@@ -1952,12 +1979,25 @@ fun FolderContextMenu(
             title = { Text("Customize") },
             text = {
                 Column {
-                    DropdownMenuItem(text = { Text("Text Size...") }, onClick = { showTextSizeEditor = true })
-                    DropdownMenuItem(text = { Text("Label Alignment...") }, onClick = { showLabelAlignmentPicker = true })
-                    DropdownMenuItem(text = { Text("Select Font...") }, onClick = { showFontMenu = true })
+                    ContextMenuItemRow(
+                        text = "Text Size...",
+                        icon = Icons.Default.TextFields,
+                        onClick = { showTextSizeEditor = true }
+                    )
+                    ContextMenuItemRow(
+                        text = "Label Alignment...",
+                        icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
+                        onClick = { showLabelAlignmentPicker = true }
+                    )
+                    ContextMenuItemRow(
+                        text = "Select Font...",
+                        icon = Icons.Default.TextFields,
+                        onClick = { showFontMenu = true }
+                    )
                     if (showFolderIconSetting) {
-                        DropdownMenuItem(
-                            text = { Text("Change Icon Placement...") },
+                        ContextMenuItemRow(
+                            text = "Change Icon Placement...",
+                            icon = Icons.Default.SwapHoriz,
                             onClick = { showIconPlacementPicker = true }
                         )
                     }
@@ -2003,15 +2043,43 @@ fun FolderContextMenu(
             },
             text = {
                 Column {
-                    DropdownMenuItem(text = { Text("Move") }, onClick = { onMove(folderItem); onDismiss() })
+                    ContextMenuItemRow(
+                        text = "Move",
+                        icon = Icons.Default.OpenWith,
+                        onClick = { onMove(folderItem); onDismiss() }
+                    )
                     if (pageCount > 1 || pageCount < MAX_PAGES) {
-                        DropdownMenuItem(text = { Text("Move to page...") }, onClick = { showPageSelector = true })
+                        ContextMenuItemRow(
+                            text = "Move to page...",
+                            icon = Icons.AutoMirrored.Filled.MenuBook,
+                            onClick = { showPageSelector = true }
+                        )
                     }
-                    DropdownMenuItem(text = { Text("Resize") }, onClick = { onResize(folderItem); onDismiss() })
-                    DropdownMenuItem(text = { Text("Customize...") }, onClick = { showCustomizeMenu = true })
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { showRenameDialog = true })
-                    DropdownMenuItem(text = { Text("Remove") }, onClick = { onRemoveFromHome(folderItem); onDismiss() })
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { showDeleteConfirm = true })
+                    ContextMenuItemRow(
+                        text = "Resize",
+                        icon = Icons.Default.AspectRatio,
+                        onClick = { onResize(folderItem); onDismiss() }
+                    )
+                    ContextMenuItemRow(
+                        text = "Customize...",
+                        icon = Icons.Default.Edit,
+                        onClick = { showCustomizeMenu = true }
+                    )
+                    ContextMenuItemRow(
+                        text = "Rename",
+                        icon = Icons.Default.DriveFileRenameOutline,
+                        onClick = { showRenameDialog = true }
+                    )
+                    ContextMenuItemRow(
+                        text = "Remove",
+                        icon = Icons.Default.Delete,
+                        onClick = { onRemoveFromHome(folderItem); onDismiss() }
+                    )
+                    ContextMenuItemRow(
+                        text = "Delete",
+                        icon = Icons.Default.Delete,
+                        onClick = { showDeleteConfirm = true }
+                    )
                 }
             },
             confirmButton = {

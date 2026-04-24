@@ -38,7 +38,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AdsClick
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -74,7 +76,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -93,10 +94,13 @@ import app.cclauncher.data.AppShortcut
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
+import app.cclauncher.helper.isSystemApp
 import app.cclauncher.helper.openAppInfo
 import app.cclauncher.helper.openSearch
+import app.cclauncher.helper.uninstall
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppListItem
+import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.components.PrivateSpaceIndicator
 import app.cclauncher.ui.components.PrivateSpaceToggle
 import app.cclauncher.ui.theme.AnimationConfig
@@ -114,6 +118,7 @@ fun AppDrawerScreen(
     onAppClick: (AppModel) -> Unit,
     selectionMode: Boolean = false,
     selectionTitle: String = "",
+    onNavigateToSettings: () -> Unit = {},
     onSwipeDown: () -> Unit, // This is the primary action to go "home" or navigate back
 ) {
     BackHandler(onBack = onSwipeDown)
@@ -583,6 +588,7 @@ fun AppDrawerScreen(
     if (showContextMenu && selectedApp != null) {
         val app = selectedApp ?: return
         val isSystemShortcut = app.isSystemShortcut
+        val canUninstall = !isSystemShortcut && !context.isSystemApp(app.appPackage)
         val hiddenApps by viewModel.hiddenApps.collectAsState()
         val isHidden = hiddenApps.any { it.getKey() == app.getKey() }
 
@@ -593,63 +599,83 @@ fun AppDrawerScreen(
 
         AlertDialog(
             onDismissRequest = dismissMenu,
-            title = { Text(app.appLabel) },
+            title = {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    Text(app.appLabel, modifier = Modifier.align(Alignment.CenterStart))
+                    IconButton(
+                        onClick = { onNavigateToSettings(); dismissMenu() },
+                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
             text = {
                 Column {
                     if (isSystemShortcut) {
-                        ContextMenuItem("Open", Icons.Default.AdsClick) {
+                        ContextMenuItemRow("Open", Icons.Default.AdsClick, onClick = {
                             handleAppClick(app)
                             dismissMenu()
-                        }
-                        ContextMenuItem("Rename", Icons.Default.DriveFileRenameOutline) {
+                        })
+                        ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
                             renameDialogVisible = true
-                        }
-                        ContextMenuItem("Add to Home Screen", Icons.Default.Add) {
+                        })
+                        ContextMenuItemRow("Add to Home Screen", Icons.Default.Add, onClick = {
                             viewModel.addAppToHomeScreen(app)
                             dismissMenu()
-                        }
-                        ContextMenuItem("App Info", Icons.Default.Info) {
+                        })
+                        ContextMenuItemRow("App Info", Icons.Default.Info, onClick = {
                             openAppInfo(context, app)
                             dismissMenu()
-                        }
+                        })
                         if (homeFolders.isNotEmpty()) {
-                            ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
+                            ContextMenuItemRow("Add to Folder...", Icons.Default.Folder, onClick = {
                                 showFolderPickerForApp = app
                                 dismissMenu()
-                            }
+                            })
                         }
-                        ContextMenuItem("Delete", Icons.Default.Delete) {
+                        ContextMenuItemRow("Delete", Icons.Default.Delete, onClick = {
                             viewModel.deleteSystemShortcut(app)
                             dismissMenu()
-                        }
+                        })
                     } else {
-                        ContextMenuItem("Open", Icons.Default.AdsClick) {
+                        ContextMenuItemRow("Open", Icons.Default.AdsClick, onClick = {
                             handleAppClick(app)
                             dismissMenu()
-                        }
-                        ContextMenuItem(if (isHidden) "Unhide" else "Hide", Icons.Default.Settings) {
+                        })
+                        ContextMenuItemRow(if (isHidden) "Unhide" else "Hide", Icons.Default.Settings, onClick = {
                             viewModel.toggleAppHidden(app)
                             dismissMenu()
-                        }
-                        ContextMenuItem("Rename", Icons.Default.DriveFileRenameOutline) {
+                        })
+                        ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
                             renameDialogVisible = true
-                        }
-                        ContextMenuItem("App Info", Icons.Default.Info) {
+                        })
+                        ContextMenuItemRow("App Info", Icons.Default.Info, onClick = {
                             openAppInfo(context, app)
                             dismissMenu()
+                        })
+                        if (canUninstall) {
+                            ContextMenuItemRow("Uninstall", Icons.Default.DeleteOutline, onClick = {
+                                context.uninstall(app.appPackage)
+                                dismissMenu()
+                            })
                         }
-                        ContextMenuItem("Add to Home Screen", Icons.Default.Add) {
+                        ContextMenuItemRow("Add to Home Screen", Icons.Default.Add, onClick = {
                             viewModel.addAppToHomeScreen(app)
                             dismissMenu()
-                        }
+                        })
                         if (homeFolders.isNotEmpty()) {
-                            ContextMenuItem("Add to Folder...", Icons.Default.SubdirectoryArrowRight) {
+                            ContextMenuItemRow("Add to Folder...", Icons.Default.Folder, onClick = {
                                 showFolderPickerForApp = app
                                 dismissMenu()
-                            }
+                            })
                         }
                         if (supportsShortcuts && !selectionMode) {
-                            ContextMenuItem("Shortcuts", Icons.Default.SubdirectoryArrowRight) {
+                            ContextMenuItemRow("Shortcuts", Icons.Default.SubdirectoryArrowRight, onClick = {
                                 shortcutsDialogApp = app
                                 shortcutsLoading = true
                                 appShortcuts = emptyList()
@@ -660,20 +686,21 @@ fun AppDrawerScreen(
                                     }
                                 }
                                 dismissMenu()
-                            }
+                            })
                         }
                         if (viewModel.isPrivateSpaceSupported &&
                             viewModel.privateSpaceState.collectAsState().value == MainViewModel.PrivateSpaceState.Unlocked) {
 
                             val isInPrivateSpace = viewModel.isAppInPrivateSpace(app)
 
-                            ContextMenuItem(
+                            ContextMenuItemRow(
                                 text = if (isInPrivateSpace) "Remove from Private Space" else "Add to Private Space",
-                                icon = Icons.Default.Lock
-                            ) {
+                                icon = Icons.Default.Lock,
+                                onClick = {
                                 viewModel.toggleAppInPrivateSpace(app)
                                 dismissMenu()
-                            }
+                                }
+                            )
                         }
                     }
                 }
@@ -804,17 +831,6 @@ fun AppDrawerScreen(
 }
 
 
-
-@Composable
-private fun ContextMenuItem(text: String, icon: ImageVector, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp, horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(icon, text, Modifier.padding(end = 16.dp))
-        Text(text, style = MaterialTheme.typography.bodyLarge)
-    }
-}
 
 @Composable
 fun AppDrawerSearch(

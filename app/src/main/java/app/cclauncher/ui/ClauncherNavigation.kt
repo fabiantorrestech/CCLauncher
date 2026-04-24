@@ -239,6 +239,7 @@ fun CLauncherNavigation(
                         AppSelectionType.SWIPE_RIGHT_APP -> "Select Swipe Right App"
                         null -> ""
                     },
+                    onNavigateToSettings = { navigateTo(LauncherDestination.Settings) },
                     onSwipeDown = { navigateTo(LauncherDestination.Home) },
                     onAppClick = { app ->
                         if (currentSelectionType != null) {
