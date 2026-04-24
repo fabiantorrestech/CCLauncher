@@ -70,6 +70,30 @@ object SearchAliasUtils {
 
     fun normalize(s: String): String = s.lowercase().trim()
 
+    fun buildSearchTerms(text: String, mode: Int): Set<String> {
+        val normalized = normalize(text)
+        if (normalized.isBlank()) return emptySet()
+
+        val out = LinkedHashSet<String>(8)
+        out += normalized
+        out += asciiFold(normalized)
+
+        if (mode == Mode.TRANSLITERATION || mode == Mode.BOTH) {
+            val toLatin = normalize(anyToLatin(text))
+            val toCyr = normalize(latinToCyrillic(text))
+            out += toLatin
+            out += asciiFold(toLatin)
+            out += toCyr
+        }
+
+        if (mode == Mode.KEYBOARD_SWAP || mode == Mode.BOTH) {
+            out += normalize(swapKeyboardLayout(text, ruToEnDirection = true))
+            out += normalize(swapKeyboardLayout(text, ruToEnDirection = false))
+        }
+
+        return out.filter { it.isNotBlank() }.toSet()
+    }
+
     /**
      * Build a set of aliases for an app label and optional package name.
      */
@@ -80,27 +104,12 @@ object SearchAliasUtils {
         includePkg: Boolean
     ): Set<String> {
         val out = LinkedHashSet<String>(8)
-        val base = normalize(label)
-        out += base
-        out += asciiFold(base)
+        out += buildSearchTerms(label, mode)
 
         if (includePkg && !packageName.isNullOrBlank()) {
             val pkgTail = packageName.substringAfterLast('.')
             out += normalize(pkgTail)
             out += asciiFold(pkgTail)
-        }
-
-        if (mode == Mode.TRANSLITERATION || mode == Mode.BOTH) {
-            val toLatin = normalize(anyToLatin(label))
-            val toCyr = normalize(latinToCyrillic(label))
-            out += toLatin
-            out += asciiFold(toLatin)
-            out += toCyr
-        }
-
-        if (mode == Mode.KEYBOARD_SWAP || mode == Mode.BOTH) {
-            out += normalize(swapKeyboardLayout(label, ruToEnDirection = true))
-            out += normalize(swapKeyboardLayout(label, ruToEnDirection = false))
         }
 
         return out.filter { it.isNotBlank() }.toSet()
@@ -110,24 +119,6 @@ object SearchAliasUtils {
      * Build normalized variants of a user query based on selected mode.
      */
     fun buildQueryVariants(query: String, mode: Int): Set<String> {
-        val q = normalize(query)
-        val out = LinkedHashSet<String>(8)
-        out += q
-        out += asciiFold(q)
-
-        if (mode == Mode.TRANSLITERATION || mode == Mode.BOTH) {
-            val toLatin = normalize(anyToLatin(query))
-            val toCyr = normalize(latinToCyrillic(query))
-            out += toLatin
-            out += asciiFold(toLatin)
-            out += toCyr
-        }
-
-        if (mode == Mode.KEYBOARD_SWAP || mode == Mode.BOTH) {
-            out += normalize(swapKeyboardLayout(query, ruToEnDirection = true))
-            out += normalize(swapKeyboardLayout(query, ruToEnDirection = false))
-        }
-
-        return out.filter { it.isNotBlank() }.toSet()
+        return buildSearchTerms(query, mode)
     }
 }

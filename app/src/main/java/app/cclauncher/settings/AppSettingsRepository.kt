@@ -5,6 +5,8 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import app.cclauncher.data.HomeLayout
+import app.cclauncher.helper.AppTagStorage
+import app.cclauncher.helper.AppTagUtils
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
 import io.github.mlmgames.settings.core.backup.ExportResult
@@ -49,6 +51,12 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
     }
 
     val settings: Flow<AppSettings> = repo.flow
+
+    private fun readAppTags(settings: AppSettings): Map<String, List<String>> =
+        AppTagStorage.decode(settings.appTagsJson)
+
+    private fun writeAppTags(tagsByApp: Map<String, List<String>>): String =
+        AppTagStorage.encode(tagsByApp)
 
     suspend fun updateSetting(propertyName: String, value: Any) {
         repo.set(propertyName, value)
@@ -250,16 +258,102 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         }
     }
 
+    suspend fun getAppTags(appKey: String): List<String> =
+        AppTagUtils.normalizeTags(readAppTags(settings.first())[appKey].orEmpty())
+
+    suspend fun setAppTags(appKey: String, tags: Collection<String>) {
+        val normalized = AppTagUtils.normalizeTags(tags)
+        repo.update { s ->
+            val updated = readAppTags(s).toMutableMap()
+            if (normalized.isEmpty()) {
+                updated.remove(appKey)
+            } else {
+                updated[appKey] = normalized
+            }
+            s.copy(appTagsJson = writeAppTags(updated))
+        }
+    }
+
+    suspend fun updateAppTags(appKey: String, transform: (List<String>) -> List<String>) {
+        val current = getAppTags(appKey)
+        setAppTags(appKey, transform(current))
+    }
+
+    suspend fun addAppTag(appKey: String, tag: String) {
+        updateAppTags(appKey) { it + tag }
+    }
+
+    suspend fun updateAppTag(appKey: String, oldTag: String, newTag: String) {
+        updateAppTags(appKey) { tags ->
+            tags.map { if (AppTagUtils.canonicalizeTag(it) == AppTagUtils.canonicalizeTag(oldTag)) newTag else it }
+        }
+    }
+
+    suspend fun removeAppTag(appKey: String, tag: String) {
+        updateAppTags(appKey) { tags ->
+            tags.filterNot { AppTagUtils.canonicalizeTag(it) == AppTagUtils.canonicalizeTag(tag) }
+        }
+    }
+
+    suspend fun removeAppTags(appKeys: Set<String>) {
+        if (appKeys.isEmpty()) return
+        repo.update { s ->
+            val updated = readAppTags(s).toMutableMap()
+            appKeys.forEach { updated.remove(it) }
+            s.copy(appTagsJson = writeAppTags(updated))
+        }
+    }
+
+    suspend fun renameTagAcrossApps(oldTag: String, newTag: String) {
+        val oldCanonical = AppTagUtils.canonicalizeTag(oldTag)
+        if (oldCanonical.isBlank()) return
+
+        repo.update { s ->
+            val updated = readAppTags(s).mapValues { (_, tags) ->
+                AppTagUtils.normalizeTags(
+                    tags.map { existing ->
+                        if (AppTagUtils.canonicalizeTag(existing) == oldCanonical) newTag else existing
+                    }
+                )
+            }.filterValues { it.isNotEmpty() }
+            s.copy(appTagsJson = writeAppTags(updated))
+        }
+    }
+
+    suspend fun removeTagAcrossApps(tag: String) {
+        val canonical = AppTagUtils.canonicalizeTag(tag)
+        if (canonical.isBlank()) return
+
+        repo.update { s ->
+            val updated = readAppTags(s).mapValues { (_, tags) ->
+                tags.filterNot { AppTagUtils.canonicalizeTag(it) == canonical }
+            }.filterValues { it.isNotEmpty() }
+            s.copy(appTagsJson = writeAppTags(updated))
+        }
+    }
+
+    suspend fun removeOrphanedShortcutTags(validShortcutKeys: Set<String>) {
+        repo.update { s ->
+            val current = readAppTags(s)
+            val updated = current.filterKeys { key ->
+                !key.startsWith("shortcut:") || validShortcutKeys.contains(key)
+            }
+            if (updated == current) s else s.copy(appTagsJson = writeAppTags(updated))
+        }
+    }
+
     suspend fun migrateAppKeys(migrations: List<AppKeyMigration>) {
         if (migrations.isEmpty()) return
         repo.update { s ->
             val renamed = s.renamedApps.toMutableMap()
             val hidden = s.hiddenApps.toMutableSet()
             val history = s.recentAppHistory.toMutableMap()
+            val appTags = readAppTags(s).toMutableMap()
 
             val renamedOriginal = s.renamedApps
             val hiddenOriginal = s.hiddenApps
             val historyOriginal = s.recentAppHistory
+            val appTagsOriginal = readAppTags(s)
 
             for (migration in migrations) {
                 val newKey = migration.newKey
@@ -286,18 +380,29 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
                     }
                 }
 
+                val mergedTags = buildList {
+                    addAll(appTags[newKey].orEmpty())
+                    sourceKeys.forEach { addAll(appTagsOriginal[it].orEmpty()) }
+                }
+                val normalizedTags = AppTagUtils.normalizeTags(mergedTags)
+                if (normalizedTags.isNotEmpty()) {
+                    appTags[newKey] = normalizedTags
+                }
+
                 for (oldKey in migration.moveKeys) {
                     if (oldKey == newKey) continue
                     renamed.remove(oldKey)
                     hidden.remove(oldKey)
                     history.remove(oldKey)
+                    appTags.remove(oldKey)
                 }
             }
 
             s.copy(
                 renamedApps = renamed,
                 hiddenApps = hidden,
-                recentAppHistory = history
+                recentAppHistory = history,
+                appTagsJson = writeAppTags(appTags.filterValues { it.isNotEmpty() })
             )
         }
     }

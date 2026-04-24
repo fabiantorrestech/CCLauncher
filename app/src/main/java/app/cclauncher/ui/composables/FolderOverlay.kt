@@ -59,6 +59,7 @@ import app.cclauncher.loadFontFamily
 import app.cclauncher.helper.showToast
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.BackHandler
+import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
 
 @Composable
@@ -71,6 +72,8 @@ fun FolderOverlay(
     onRemoveApp: (FolderApp) -> Unit,
     onResizeApp: (FolderApp, Int, Int) -> Unit,
     onAppRename: (FolderApp, String) -> Unit = { _, _ -> },
+    appTagsForApp: (FolderApp) -> List<String> = { emptyList() },
+    onSaveAppTags: (FolderApp, List<String>) -> Unit = { _, _ -> },
     onAppTextSizeChange: (FolderApp, Float) -> Unit = { _, _ -> },
     onAppLabelAlignmentChange: (FolderApp, Int) -> Unit = { _, _ -> },
     onAppIconPlacementChange: (FolderApp, Int) -> Unit = { _, _ -> },
@@ -81,6 +84,7 @@ fun FolderOverlay(
     var movingApp by remember { mutableStateOf<FolderApp?>(null) }
     var appContextMenu by remember { mutableStateOf<FolderApp?>(null) }
     var appCustomizeMenu by remember { mutableStateOf<FolderApp?>(null) }
+    var appTagsMenu by remember { mutableStateOf<FolderApp?>(null) }
     var appFontMenu by remember { mutableStateOf<FolderApp?>(null) }
     var appRenameMenu by remember { mutableStateOf<FolderApp?>(null) }
     var appRenameValue by remember { mutableStateOf("") }
@@ -293,6 +297,13 @@ fun FolderOverlay(
                                 appCustomizeMenu = null
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text("Tags...") },
+                            onClick = {
+                                appTagsMenu = app
+                                appCustomizeMenu = null
+                            }
+                        )
                         if (app.isSystemShortcut && settings.showShortcutIcon) {
                             DropdownMenuItem(
                                 text = { Text("Change Icon Placement...") },
@@ -306,6 +317,22 @@ fun FolderOverlay(
                 },
                 confirmButton = {
                     TextButton(onClick = { appCustomizeMenu = null }) { Text("Close") }
+                }
+            )
+        }
+
+        appTagsMenu?.let { app ->
+            AppTagsEditorDialog(
+                title = "Tags for ${app.appLabel}",
+                initialTags = appTagsForApp(app),
+                onSave = { tags -> onSaveAppTags(app, tags) },
+                onBack = {
+                    appTagsMenu = null
+                    appCustomizeMenu = app
+                },
+                onDone = {
+                    appTagsMenu = null
+                    appContextMenu = null
                 }
             )
         }

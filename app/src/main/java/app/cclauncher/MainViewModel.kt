@@ -22,6 +22,7 @@ import androidx.lifecycle.viewModelScope
 import app.cclauncher.data.*
 import app.cclauncher.data.Constants.MAX_PAGES
 import app.cclauncher.data.repository.AppRepository
+import app.cclauncher.helper.AppTagStorage
 import app.cclauncher.helper.BitmapUtils
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppPreference
@@ -107,6 +108,8 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     private val _hiddenApps = MutableStateFlow<List<AppModel>>(emptyList())
     val hiddenApps: StateFlow<List<AppModel>> = _hiddenApps.asStateFlow()
+    private val _appTags = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val appTags: StateFlow<Map<String, List<String>>> = _appTags.asStateFlow()
 
     // Reset launcher state
     private val _launcherResetFailed = MutableStateFlow(false)
@@ -212,6 +215,15 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
         viewModelScope.launch {
             settingsRepository.settings
+                .map { AppTagStorage.decode(it.appTagsJson) }
+                .distinctUntilChanged()
+                .collect { tags ->
+                    _appTags.value = tags
+                }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.settings
                 .map { it.selectedIconPack }
                 .distinctUntilChanged()
                 .drop(1) // Skip initial value
@@ -235,12 +247,21 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             combine(
                 appRepository.appListAll,
                 settingsRepository.settings
-                    .map { it.searchAliasesMode to it.searchIncludePackageNames }
+                    .map { Triple(it.searchAliasesMode, it.searchIncludePackageNames, AppTagStorage.decode(it.appTagsJson)) }
                     .distinctUntilChanged()
             ) { _, _ -> }
                 .collect {
                     rebuildSearchAliasIndex()
                     reapplySearchFilter()
+                }
+        }
+
+        viewModelScope.launch {
+            appRepository.appListAll
+                .map { apps -> apps.filter { it.isSystemShortcut }.mapTo(mutableSetOf()) { it.getKey() } }
+                .distinctUntilChanged()
+                .collect { shortcutKeys ->
+                    settingsRepository.removeOrphanedShortcutTags(shortcutKeys)
                 }
         }
 
@@ -335,8 +356,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         val settings = settingsRepository.settings.first()
         val mode = settings.searchAliasesMode
         val includePkg = settings.searchIncludePackageNames
+        val tagsByApp = _appTags.value
 
-        if (mode == SearchAliasUtils.Mode.OFF && !includePkg) {
+        if (mode == SearchAliasUtils.Mode.OFF && !includePkg && tagsByApp.isEmpty()) {
             searchAliasIndex = emptyMap()
             return
         }
@@ -348,7 +370,10 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 packageName = app.appPackage,
                 mode = mode,
                 includePkg = includePkg
-            )
+            ).toMutableSet()
+            tagsByApp[app.getKey()].orEmpty().forEach { tag ->
+                aliases += SearchAliasUtils.buildSearchTerms(tag, mode)
+            }
             idx[app.getKey()] = aliases
         }
         searchAliasIndex = idx
@@ -1080,18 +1105,22 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         val legacyCopyKeys = AppKey.legacyCopyKeysForApp(app)
         if (legacyMoveKeys.isNotEmpty() || legacyCopyKeys.isNotEmpty()) {
             val settings = settingsRepository.settings.first()
+            val appTags = AppTagStorage.decode(settings.appTagsJson)
             val appKey = app.getKey()
             val hasNewRename = settings.renamedApps.containsKey(appKey)
             val hasNewHidden = settings.hiddenApps.contains(appKey)
             val newHistory = settings.recentAppHistory[appKey]
+            val hasNewTags = appTags.containsKey(appKey)
 
             val legacyRename = legacyCopyKeys.firstNotNullOfOrNull { settings.renamedApps[it] }
             val legacyHidden = legacyCopyKeys.any { settings.hiddenApps.contains(it) }
             val legacyHistory = legacyCopyKeys.mapNotNull { settings.recentAppHistory[it] }.maxOrNull()
+            val legacyTags = legacyCopyKeys.flatMap { appTags[it].orEmpty() }
 
             val shouldCopy = (!hasNewRename && legacyRename != null) ||
                 (!hasNewHidden && legacyHidden) ||
-                (legacyHistory != null && (newHistory == null || legacyHistory > newHistory))
+                (legacyHistory != null && (newHistory == null || legacyHistory > newHistory)) ||
+                (!hasNewTags && legacyTags.isNotEmpty())
 
             val copyKeys = if (shouldCopy) legacyCopyKeys else emptySet()
 
@@ -1668,10 +1697,13 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         val renamedKeys = settings.renamedApps.keys
         val hiddenKeys = settings.hiddenApps
         val historyKeys = settings.recentAppHistory.keys
+        val appTags = AppTagStorage.decode(settings.appTagsJson)
+        val tagKeys = appTags.keys
         val existingKeys = buildSet {
             addAll(renamedKeys)
             addAll(hiddenKeys)
             addAll(historyKeys)
+            addAll(tagKeys)
         }
 
         val migrations = mutableListOf<AppKeyMigration>()
@@ -1687,14 +1719,17 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             val hasNewRename = settings.renamedApps.containsKey(appKey)
             val hasNewHidden = settings.hiddenApps.contains(appKey)
             val newHistory = settings.recentAppHistory[appKey]
+            val hasNewTags = appTags.containsKey(appKey)
 
             val legacyRename = legacyCopyCandidates.firstNotNullOfOrNull { settings.renamedApps[it] }
             val legacyHidden = legacyCopyCandidates.any { settings.hiddenApps.contains(it) }
             val legacyHistory = legacyCopyCandidates.mapNotNull { settings.recentAppHistory[it] }.maxOrNull()
+            val legacyTags = legacyCopyCandidates.flatMap { appTags[it].orEmpty() }
 
             val shouldCopy = (!hasNewRename && legacyRename != null) ||
                 (!hasNewHidden && legacyHidden) ||
-                (legacyHistory != null && (newHistory == null || legacyHistory > newHistory))
+                (legacyHistory != null && (newHistory == null || legacyHistory > newHistory)) ||
+                (!hasNewTags && legacyTags.isNotEmpty())
 
             val legacyCopyKeys = if (shouldCopy) legacyCopyCandidates else emptySet()
 
@@ -1735,6 +1770,42 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             } catch (e: Exception) {
                 snackbarManager.show("Failed to toggle app visibility: ${e.message}")
             }
+        }
+    }
+
+    fun getTagsForApp(app: AppModel): List<String> =
+        _appTags.value[app.getKey()].orEmpty()
+
+    fun saveTagsForApp(app: AppModel, tags: List<String>) {
+        viewModelScope.launch {
+            val appKey = app.getKey()
+            settingsRepository.setAppTags(appKey, tags)
+
+            val legacyMoveKeys = AppKey.legacyMoveKeysForApp(app)
+            val legacyCopyKeys = AppKey.legacyCopyKeysForApp(app)
+            if (legacyMoveKeys.isNotEmpty() || legacyCopyKeys.isNotEmpty()) {
+                settingsRepository.migrateAppKeys(
+                    listOf(
+                        AppKeyMigration(
+                            newKey = appKey,
+                            moveKeys = legacyMoveKeys,
+                            copyKeys = legacyCopyKeys
+                        )
+                    )
+                )
+            }
+        }
+    }
+
+    fun renameTagAcrossApps(oldTag: String, newTag: String) {
+        viewModelScope.launch {
+            settingsRepository.renameTagAcrossApps(oldTag, newTag)
+        }
+    }
+
+    fun removeTagAcrossApps(tag: String) {
+        viewModelScope.launch {
+            settingsRepository.removeTagAcrossApps(tag)
         }
     }
 

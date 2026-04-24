@@ -138,6 +138,7 @@ private const val MANUAL_PRIVATE_SPACE = "private_space"
 private const val MANUAL_DEFAULT_LAUNCHER = "default_launcher"
 private const val MANUAL_LOCK_SETTINGS = "lock_settings"
 private const val MANUAL_HIDDEN_APPS = "hidden_apps"
+private const val MANUAL_APP_TAGS = "app_tags"
 private const val MANUAL_APP_INFO = "app_info"
 private const val MANUAL_ABOUT = "about"
 private const val MANUAL_EXPORT_SETTINGS = "export_settings"
@@ -229,6 +230,10 @@ private val settingsTabs = listOf(
                     field("searchResultsUseHomeFont"),
                     field("searchResultsFontSize"),
                 ),
+            ),
+            SettingsSectionSpec(
+                title = "App Tags",
+                entries = listOf(manual(MANUAL_APP_TAGS)),
             ),
         ),
     ),
@@ -397,6 +402,7 @@ fun SettingsScreen(
     mainViewModel: MainViewModel = koinViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToHiddenApps: () -> Unit = {},
+    onNavigateToAppTags: () -> Unit = {},
     onNavigateToFolderList: () -> Unit = {},
     onNavigateToCornerDotSettings: () -> Unit = {},
 ) {
@@ -591,6 +597,13 @@ fun SettingsScreen(
                 description = "Manage apps hidden from the app drawer",
                 category = manualCategories.getValue(MANUAL_HIDDEN_APPS),
                 onClick = onNavigateToHiddenApps,
+            ),
+            ManualSearchItem(
+                key = MANUAL_APP_TAGS,
+                title = "App Tags",
+                description = "Manage search tags linked to apps and shortcuts",
+                category = manualCategories.getValue(MANUAL_APP_TAGS),
+                onClick = onNavigateToAppTags,
             ),
             ManualSearchItem(
                 key = MANUAL_APP_INFO,
@@ -1179,6 +1192,7 @@ fun SettingsScreen(
                                                     viewModel = viewModel,
                                                     coroutineScope = coroutineScope,
                                                     onNavigateToHiddenApps = onNavigateToHiddenApps,
+                                                    onNavigateToAppTags = onNavigateToAppTags,
                                                     onNavigateToFolderList = onNavigateToFolderList,
                                                     onNavigateToCornerDotSettings = onNavigateToCornerDotSettings,
                                                     exportLauncher = exportLauncher,
@@ -1506,6 +1520,7 @@ private fun ManualSettingsEntryRenderer(
     viewModel: SettingsViewModel,
     coroutineScope: kotlinx.coroutines.CoroutineScope,
     onNavigateToHiddenApps: () -> Unit,
+    onNavigateToAppTags: () -> Unit,
     onNavigateToFolderList: () -> Unit,
     onNavigateToCornerDotSettings: () -> Unit,
     exportLauncher: androidx.activity.result.ActivityResultLauncher<String>,
@@ -1599,6 +1614,14 @@ private fun ManualSettingsEntryRenderer(
                 title = "Hidden Apps",
                 description = "Manage apps hidden from the app drawer",
                 onClick = onNavigateToHiddenApps,
+            )
+        }
+
+        MANUAL_APP_TAGS -> {
+            SettingsItem(
+                title = "App Tags",
+                description = "Manage search tags linked to apps and shortcuts",
+                onClick = onNavigateToAppTags,
             )
         }
 

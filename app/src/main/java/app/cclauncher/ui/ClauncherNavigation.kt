@@ -42,6 +42,7 @@ import app.cclauncher.helper.showToast
 import app.cclauncher.ui.components.snackbar.LauncherSnackbarHost
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.screens.AppDrawerScreen
+import app.cclauncher.ui.screens.AppTagsScreen
 import app.cclauncher.ui.screens.CornerZoneSettingsScreen
 import app.cclauncher.ui.screens.FolderDetailScreen
 import app.cclauncher.ui.screens.FolderListScreen
@@ -270,6 +271,7 @@ fun CLauncherNavigation(
                         }
                         pushOnTop(LauncherDestination.HiddenApps)
                     },
+                    onNavigateToAppTags = { pushOnTop(LauncherDestination.AppTags) },
                     onNavigateToFolderList = { pushOnTop(LauncherDestination.FolderList) },
                     onNavigateToCornerDotSettings = { pushOnTop(LauncherDestination.CornerZoneSettings) },
                 )
@@ -280,6 +282,19 @@ fun CLauncherNavigation(
                     viewModel = viewModel,
                     onNavigateBack = {
                         if (backStack.lastOrNull() == LauncherDestination.HiddenApps) {
+                            backStack.removeAt(backStack.lastIndex)
+                        } else {
+                            navigateTo(LauncherDestination.Settings)
+                        }
+                    }
+                )
+            }
+
+            entry<LauncherDestination.AppTags>(metadata = settingsTransitions) {
+                AppTagsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = {
+                        if (backStack.lastOrNull() == LauncherDestination.AppTags) {
                             backStack.removeAt(backStack.lastIndex)
                         } else {
                             navigateTo(LauncherDestination.Settings)
@@ -420,6 +435,9 @@ sealed interface LauncherDestination : NavKey {
 
     @Serializable
     data object HiddenApps : LauncherDestination
+
+    @Serializable
+    data object AppTags : LauncherDestination
 
     @Serializable
     data object WidgetPicker : LauncherDestination

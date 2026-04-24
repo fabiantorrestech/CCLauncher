@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.AlertDialog
@@ -100,6 +101,7 @@ import app.cclauncher.helper.openSearch
 import app.cclauncher.helper.uninstall
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppListItem
+import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.components.PrivateSpaceIndicator
 import app.cclauncher.ui.components.PrivateSpaceToggle
@@ -172,6 +174,7 @@ fun AppDrawerScreen(
 
     var selectedApp by remember { mutableStateOf<AppModel?>(null) }
     var showContextMenu by remember { mutableStateOf(false) }
+    var showTagsEditor by remember { mutableStateOf(false) }
     var showFolderPickerForApp by remember { mutableStateOf<AppModel?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -597,7 +600,18 @@ fun AppDrawerScreen(
 
         val dismissMenu = { showContextMenu = false; selectedApp = null }
 
-        AlertDialog(
+        if (showTagsEditor) {
+            AppTagsEditorDialog(
+                title = "Tags for ${app.appLabel}",
+                initialTags = viewModel.getTagsForApp(app),
+                onSave = { tags -> viewModel.saveTagsForApp(app, tags) },
+                onBack = { showTagsEditor = false },
+                onDone = {
+                    showTagsEditor = false
+                    dismissMenu()
+                }
+            )
+        } else AlertDialog(
             onDismissRequest = dismissMenu,
             title = {
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -623,6 +637,9 @@ fun AppDrawerScreen(
                         })
                         ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
                             renameDialogVisible = true
+                        })
+                        ContextMenuItemRow("Tags...", Icons.Default.Search, onClick = {
+                            showTagsEditor = true
                         })
                         ContextMenuItemRow("Add to Home Screen", Icons.Default.Add, onClick = {
                             viewModel.addAppToHomeScreen(app)
@@ -653,6 +670,9 @@ fun AppDrawerScreen(
                         })
                         ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
                             renameDialogVisible = true
+                        })
+                        ContextMenuItemRow("Tags...", Icons.Default.Search, onClick = {
+                            showTagsEditor = true
                         })
                         ContextMenuItemRow("App Info", Icons.Default.Info, onClick = {
                             openAppInfo(context, app)

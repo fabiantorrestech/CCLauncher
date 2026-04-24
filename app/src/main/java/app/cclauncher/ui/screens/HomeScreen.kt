@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.TextFields
@@ -117,6 +118,7 @@ import app.cclauncher.helper.getScreenDimensions
 import app.cclauncher.helper.showToast
 import app.cclauncher.helper.withResolvedUser
 import app.cclauncher.settings.AppSettings
+import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.composables.HomeAppItem
@@ -407,6 +409,10 @@ fun HomeScreen(
                         viewModel.renameApp(it.appModel, newName)
                         showAppContextMenu = null
                     },
+                    appTags = viewModel.getTagsForApp(it.appModel),
+                    onSaveTags = { tags ->
+                        viewModel.saveTagsForApp(it.appModel, tags)
+                    },
                     onAddToFolder = { folder ->
                         viewModel.addAppToFolder(folder.id, it.appModel)
                         viewModel.removeAppFromHomeScreen(it)
@@ -604,6 +610,12 @@ fun HomeScreen(
                     },
                     onAppRename = { folderApp, newName ->
                         viewModel.renameApp(folderApp.toAppModel(), newName)
+                    },
+                    appTagsForApp = { folderApp ->
+                        viewModel.getTagsForApp(folderApp.toAppModel())
+                    },
+                    onSaveAppTags = { folderApp, tags ->
+                        viewModel.saveTagsForApp(folderApp.toAppModel(), tags)
                     },
                     onAppSelectFont = { folderApp ->
                         pendingFolderAppFontItem = fid to folderApp
@@ -1064,6 +1076,8 @@ fun HomeAppContextMenu(
     onMove: (HomeItem.App) -> Unit,
     onMoveToPage: (HomeItem.App, Int) -> Unit,
     onRename: (String) -> Unit = {},
+    appTags: List<String> = emptyList(),
+    onSaveTags: (List<String>) -> Unit = {},
     onAddToFolder: ((HomeItem.Folder) -> Unit)? = null,
     onTextSizeChange: (Float) -> Unit = {},
     onLabelAlignmentChange: (Int) -> Unit = {},
@@ -1076,6 +1090,7 @@ fun HomeAppContextMenu(
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
     var showCustomizeMenu by remember { mutableStateOf(false) }
+    var showTagsEditor by remember { mutableStateOf(false) }
     var showFontMenu by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showTextSizeEditor by remember { mutableStateOf(false) }
@@ -1170,6 +1185,14 @@ fun HomeAppContextMenu(
                 TextButton(onClick = { showFontMenu = false }) { Text("Back") }
             }
         )
+    } else if (showTagsEditor) {
+        AppTagsEditorDialog(
+            title = "Tags for ${appItem.appModel.appLabel}",
+            initialTags = appTags,
+            onSave = onSaveTags,
+            onBack = { showTagsEditor = false },
+            onDone = onDismiss
+        )
     } else if (showCustomizeMenu) {
         AlertDialog(
             onDismissRequest = { showCustomizeMenu = false },
@@ -1190,6 +1213,11 @@ fun HomeAppContextMenu(
                         text = "Select Font...",
                         icon = Icons.Default.TextFields,
                         onClick = { showFontMenu = true }
+                    )
+                    ContextMenuItemRow(
+                        text = "Tags...",
+                        icon = Icons.Default.Search,
+                        onClick = { showTagsEditor = true }
                     )
                     if (appItem.appModel.isSystemShortcut && showShortcutIconSetting) {
                         ContextMenuItemRow(

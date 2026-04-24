@@ -722,6 +722,7 @@ data class AppSettings(
     // These were JSON strings before; kmp-settings has Map fields that will read/write the same JSON format.
     @Persisted(key = "RENAMED_APPS_JSON") val renamedApps: Map<String, String> = emptyMap(),
     @Persisted(key = "RECENT_APP_HISTORY") val recentAppHistory: Map<String, Long> = emptyMap(),
+    @Persisted(key = "APP_TAGS_JSON") val appTagsJson: String = "",
 
     @Persisted(key = "HIDDEN_APPS") val hiddenApps: Set<String> = emptySet(),
     @Persisted(key = "HIDDEN_APPS_UPDATED") val hiddenAppsUpdated: Boolean = false,
