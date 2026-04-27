@@ -13,6 +13,9 @@
 /build
 /captures
 /app/release
+/.codex
+/.claude
+/docs
 .externalNativeBuild
 .cxx
 google-services.json
