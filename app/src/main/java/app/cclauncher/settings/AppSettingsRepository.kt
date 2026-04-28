@@ -208,13 +208,17 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
             val normalized = layout.copy(
                 rows = settings.homeRowsFor(orientation),
                 columns = settings.homeColumnsFor(orientation),
-                pageCount = settings.homePagesFor(orientation)
+                pageCount = layout.pageCount
             )
             val updatedLayouts = settings.homeLayouts.withLayout(orientation, normalized)
-            settings.copy(
+            val base = settings.copy(
                 homeLayout = updatedLayouts.portrait,
                 homeLayouts = updatedLayouts
             )
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> base.copy(portraitHomeScreenPages = layout.pageCount)
+                HomeOrientation.LANDSCAPE -> base.copy(landscapeHomeScreenPages = layout.pageCount)
+            }
         }
     }
 

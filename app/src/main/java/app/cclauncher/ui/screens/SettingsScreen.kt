@@ -95,6 +95,7 @@ import app.cclauncher.settings.ColorPicker
 import app.cclauncher.settings.FontPicker
 import app.cclauncher.settings.IconPackPicker
 import androidx.compose.ui.tooling.preview.Preview
+import app.cclauncher.data.HomeOrientation
 import app.cclauncher.ui.components.PageReduceWarningDialog
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.dialogs.ImportExportResultDialog
@@ -454,7 +455,7 @@ fun SettingsScreen(
     var pendingGridChange by remember { mutableStateOf<Pair<String, Int>?>(null) }
 
     var showPageWarningDialog by remember { mutableStateOf(false) }
-    var pendingPageChange by remember { mutableStateOf<Int?>(null) }
+    var pendingPageChange by remember { mutableStateOf<Pair<Int, HomeOrientation>?>(null) }
 
     val homeLayoutState by mainViewModel.homeLayoutState.collectAsState()
     val allFolders = remember(homeLayoutState.items) { mainViewModel.getAllFolders() }
@@ -730,7 +731,8 @@ fun SettingsScreen(
         PageReduceWarningDialog(
             onConfirm = {
                 coroutineScope.launch {
-                    mainViewModel.updatePageCount(pendingPageChange!!)
+                    val (newCount, orientation) = pendingPageChange!!
+                    mainViewModel.updatePageCount(newCount, orientation)
                     showPageWarningDialog = false
                     pendingPageChange = null
                 }
@@ -843,13 +845,14 @@ fun SettingsScreen(
                                 }
 
                                 propertyName == "portraitHomeScreenPages" || propertyName == "landscapeHomeScreenPages" -> {
-                                    if (mainViewModel.willPageChangeAffectItems(intValue)) {
-                                        pendingPageChange = intValue
+                                    val targetOrientation = if (propertyName == "portraitHomeScreenPages") HomeOrientation.PORTRAIT else HomeOrientation.LANDSCAPE
+                                    if (mainViewModel.willPageChangeAffectItems(intValue, targetOrientation)) {
+                                        pendingPageChange = intValue to targetOrientation
                                         showPageWarningDialog = true
                                         showingDialog = null
                                         return@launch
                                     }
-                                    mainViewModel.updatePageCount(intValue)
+                                    mainViewModel.updatePageCount(intValue, targetOrientation)
                                 }
 
                                 else -> {

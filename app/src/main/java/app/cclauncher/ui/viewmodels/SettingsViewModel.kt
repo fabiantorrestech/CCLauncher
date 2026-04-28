@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import app.cclauncher.data.HomeOrientation
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.settings.homeColumnsFor
@@ -115,18 +116,20 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     suspend fun willGridChangeAffectItems(propertyName: String, newValue: Int): Boolean {
         val currentSettings = settingsState.value
-        val currentLayout = settingsRepository.getHomeLayout().first()
-        val orientation = settingsRepository.getActiveHomeOrientation()
+        val targetOrientation = when {
+            propertyName.startsWith("portrait") -> HomeOrientation.PORTRAIT
+            propertyName.startsWith("landscape") -> HomeOrientation.LANDSCAPE
+            else -> settingsRepository.getActiveHomeOrientation()
+        }
+        val currentLayout = settingsRepository.getHomeLayout(targetOrientation).first()
 
         val newRows = when (propertyName) {
-            "portraitHomeScreenRows" -> if (orientation.name == "PORTRAIT") newValue else currentSettings.homeRowsFor(orientation)
-            "landscapeHomeScreenRows" -> if (orientation.name == "LANDSCAPE") newValue else currentSettings.homeRowsFor(orientation)
-            else -> currentSettings.homeRowsFor(orientation)
+            "portraitHomeScreenRows", "landscapeHomeScreenRows" -> newValue
+            else -> currentSettings.homeRowsFor(targetOrientation)
         }
         val newColumns = when (propertyName) {
-            "portraitHomeScreenColumns" -> if (orientation.name == "PORTRAIT") newValue else currentSettings.homeColumnsFor(orientation)
-            "landscapeHomeScreenColumns" -> if (orientation.name == "LANDSCAPE") newValue else currentSettings.homeColumnsFor(orientation)
-            else -> currentSettings.homeColumnsFor(orientation)
+            "portraitHomeScreenColumns", "landscapeHomeScreenColumns" -> newValue
+            else -> currentSettings.homeColumnsFor(targetOrientation)
         }
 
         return currentLayout.items.any { item ->

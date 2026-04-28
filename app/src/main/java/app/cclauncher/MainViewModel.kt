@@ -2400,94 +2400,47 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
         }
     }
 
-    fun willPageChangeAffectItems(newPageCount: Int): Boolean {
-        val currentLayout = _homeLayoutState.value
-        if (newPageCount >= currentLayout.pageCount) return false
-
-        return currentLayout.items.any { it.page >= newPageCount }
+    fun willPageChangeAffectItems(newPageCount: Int, orientation: HomeOrientation): Boolean {
+        val layout = if (orientation == _activeHomeOrientation.value) {
+            _homeLayoutState.value
+        } else {
+            val settings = _settingsSnapshot.value
+            settings.homeLayouts.layoutFor(orientation).copy(
+                rows = settings.homeRowsFor(orientation),
+                columns = settings.homeColumnsFor(orientation),
+                pageCount = settings.homePagesFor(orientation)
+            )
+        }
+        if (newPageCount >= layout.pageCount) return false
+        return layout.items.any { it.page >= newPageCount }
     }
 
-    fun updatePageCount(newPageCount: Int) {
+    fun updatePageCount(newPageCount: Int, orientation: HomeOrientation) {
         viewModelScope.launch {
-            val currentLayout = _homeLayoutState.value
+            val currentLayout = if (orientation == _activeHomeOrientation.value) {
+                _homeLayoutState.value
+            } else {
+                loadLayoutForOrientation(orientation)
+            }
             val clampedCount = newPageCount.coerceIn(1, MAX_PAGES)
 
-            if (clampedCount < currentLayout.pageCount) {
-                val itemsToRelocate = currentLayout.items.filter { it.page >= clampedCount }
-
-                if (itemsToRelocate.isNotEmpty()) {
-                    val workingLayout = currentLayout.copy(pageCount = clampedCount)
-                    val relocatedItems = mutableListOf<HomeItem>()
-                    val removedWidgetIds = mutableListOf<Int>()
-
-                    val validItems = currentLayout.items.filter { it.page < clampedCount }.toMutableList()
-
-                    for (item in itemsToRelocate) {
-                        var placed = false
-
-                        for (targetPage in (clampedCount - 1) downTo 0) {
-                            val tempLayout = workingLayout.copy(items = validItems + relocatedItems)
-                            val newPos = findNextAvailableGridPosition(
-                                tempLayout,
-                                item.columnSpan,
-                                item.rowSpan,
-                                targetPage
-                            )
-
-                            if (newPos != null) {
-                                val relocatedItem = when (item) {
-                                    is HomeItem.App -> item.copy(
-                                        page = targetPage,
-                                        row = newPos.first,
-                                        column = newPos.second
-                                    )
-                                    is HomeItem.Widget -> item.copy(
-                                        page = targetPage,
-                                        row = newPos.first,
-                                        column = newPos.second
-                                    )
-                                    is HomeItem.Folder -> item.copy(
-                                        page = targetPage,
-                                        row = newPos.first,
-                                        column = newPos.second
-                                    )
-                                }
-                                relocatedItems.add(relocatedItem)
-                                placed = true
-                                break
-                            }
-                        }
-
-                        if (!placed) {
-                            if (item is HomeItem.Widget && !item.isPlaceholder) {
-                                removedWidgetIds.add(item.appWidgetId)
-                            }
-                            snackbarManager.show("Some items could not be relocated and were removed")
-                        }
+            val removedItems = currentLayout.items.filter { it.page >= clampedCount }
+            removedItems.filterIsInstance<HomeItem.Widget>()
+                .filter { !it.isPlaceholder }
+                .forEach { widget ->
+                    try {
+                        appWidgetHost.deleteAppWidgetId(widget.appWidgetId)
+                    } catch (e: Exception) {
+                        Log.e("MainViewModel", "Error deleting widget ID ${widget.appWidgetId}", e)
                     }
-
-                    removedWidgetIds.forEach { widgetId ->
-                        try {
-                            appWidgetHost.deleteAppWidgetId(widgetId)
-                        } catch (e: Exception) {
-                            Log.e("MainViewModel", "Error deleting widget ID $widgetId", e)
-                        }
-                    }
-
-                    val newLayout = workingLayout.copy(items = validItems + relocatedItems)
-                    settingsRepository.saveHomeLayout(newLayout)
-                } else {
-                    settingsRepository.saveHomeLayout(currentLayout.copy(pageCount = clampedCount))
                 }
-            } else {
-                settingsRepository.saveHomeLayout(currentLayout.copy(pageCount = clampedCount))
-            }
 
-            if (_currentPage.value >= clampedCount) {
+            val keptItems = currentLayout.items.filter { it.page < clampedCount }
+            saveLayoutForOrientation(orientation, currentLayout.copy(pageCount = clampedCount, items = keptItems))
+
+            if (orientation == _activeHomeOrientation.value && _currentPage.value >= clampedCount) {
                 _currentPage.value = clampedCount - 1
             }
-
-            settingsRepository.updateSetting("homeScreenPages", clampedCount)
         }
     }
 

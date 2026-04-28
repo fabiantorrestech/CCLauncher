@@ -242,7 +242,7 @@ fun PageReduceWarningDialog(
 ) {
     ConfirmationDialog(
         title = "Remove Pages",
-        message = "Some pages being removed contain apps or widgets. They will be moved to remaining pages if space is available, otherwise they will be removed. Do you want to continue?",
+        message = "The pages being removed contain apps, folders, or widgets. All items on those pages will be removed from the home screen. Do you want to continue?",
         confirmText = "Continue",
         onConfirm = onConfirm,
         onDismiss = onDismiss
