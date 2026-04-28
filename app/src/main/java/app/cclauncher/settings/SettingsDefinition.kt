@@ -2,8 +2,10 @@ package app.cclauncher.settings
 
 import androidx.appcompat.app.AppCompatDelegate
 import app.cclauncher.data.Constants
+import app.cclauncher.data.HomeOrientation
 import kotlinx.serialization.Serializable
 import app.cclauncher.data.HomeLayout
+import app.cclauncher.data.OrientationHomeLayouts
 import io.github.mlmgames.settings.core.annotations.CategoryDefinition
 import io.github.mlmgames.settings.core.annotations.Persisted
 import io.github.mlmgames.settings.core.annotations.SchemaVersion
@@ -15,7 +17,7 @@ import io.github.mlmgames.settings.core.types.SettingTypeMarker
 import io.github.mlmgames.settings.core.types.Slider
 import io.github.mlmgames.settings.core.types.Toggle
 
-@SchemaVersion(1)
+@SchemaVersion(3)
 data class AppSettings(
 
     @Setting(
@@ -483,6 +485,87 @@ data class AppSettings(
     val homeScreenPages: Int = 1,
 
     @Setting(
+        title = "Enable Landscape Layout",
+        description = "Use a separate home layout when the launcher is in landscape",
+        category = Layout::class,
+        type = Toggle::class,
+        key = "LANDSCAPE_LAYOUT_ENABLED",
+    )
+    val landscapeLayoutEnabled: Boolean = false,
+
+    @Setting(
+        title = "Rows",
+        description = "Number of rows in the portrait home grid",
+        category = Layout::class,
+        type = Slider::class,
+        min = 4f,
+        max = 12f,
+        step = 1f,
+        key = "PORTRAIT_HOME_SCREEN_ROWS",
+    )
+    val portraitHomeScreenRows: Int = 8,
+
+    @Setting(
+        title = "Columns",
+        description = "Number of columns in the portrait home grid",
+        category = Layout::class,
+        type = Slider::class,
+        min = 2f,
+        max = 8f,
+        step = 1f,
+        key = "PORTRAIT_HOME_SCREEN_COLUMNS",
+    )
+    val portraitHomeScreenColumns: Int = 4,
+
+    @Setting(
+        title = "Pages",
+        description = "Number of portrait home pages",
+        category = Layout::class,
+        type = Slider::class,
+        min = 1f,
+        max = 5f,
+        step = 1f,
+        key = "PORTRAIT_HOME_SCREEN_PAGES",
+    )
+    val portraitHomeScreenPages: Int = 1,
+
+    @Setting(
+        title = "Rows",
+        description = "Number of rows in the landscape home grid",
+        category = Layout::class,
+        type = Slider::class,
+        min = 4f,
+        max = 12f,
+        step = 1f,
+        key = "LANDSCAPE_HOME_SCREEN_ROWS",
+    )
+    val landscapeHomeScreenRows: Int = 4,
+
+    @Setting(
+        title = "Columns",
+        description = "Number of columns in the landscape home grid",
+        category = Layout::class,
+        type = Slider::class,
+        min = 2f,
+        max = 8f,
+        step = 1f,
+        key = "LANDSCAPE_HOME_SCREEN_COLUMNS",
+    )
+    val landscapeHomeScreenColumns: Int = 8,
+
+    @Setting(
+        title = "Pages",
+        description = "Number of landscape home pages",
+        category = Layout::class,
+        type = Slider::class,
+        min = 1f,
+        max = 5f,
+        step = 1f,
+        key = "LANDSCAPE_HOME_SCREEN_PAGES",
+    )
+    val landscapeHomeScreenPages: Int = 1,
+
+    @Setting(
         title = "Show Page Indicator",
         description = "Show page dots at the bottom of the home screen",
         category = Layout::class,
@@ -648,6 +731,174 @@ data class AppSettings(
     @Persisted(key = "SWIPE_RIGHT_FOLDER_ID")
     val swipeRightFolderId: String = "",
 
+    @Setting(
+        title = "Swipe Down Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "PORTRAIT_SWIPE_DOWN_ACTION",
+    )
+    val portraitSwipeDownAction: Int = Constants.SwipeAction.NOTIFICATIONS,
+
+    @Setting(
+        title = "Swipe Down App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "PORTRAIT_SWIPE_DOWN_APP_JSON",
+    )
+    @Serialized
+    val portraitSwipeDownApp: AppPreference = AppPreference(),
+
+    @Persisted(key = "PORTRAIT_SWIPE_DOWN_FOLDER_ID")
+    val portraitSwipeDownFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Up Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "PORTRAIT_SWIPE_UP_ACTION",
+    )
+    val portraitSwipeUpAction: Int = Constants.SwipeAction.SEARCH,
+
+    @Setting(
+        title = "Swipe Up App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "PORTRAIT_SWIPE_UP_APP_JSON",
+    )
+    @Serialized
+    val portraitSwipeUpApp: AppPreference = AppPreference(),
+
+    @Persisted(key = "PORTRAIT_SWIPE_UP_FOLDER_ID")
+    val portraitSwipeUpFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Left Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "PORTRAIT_SWIPE_LEFT_ACTION",
+    )
+    val portraitSwipeLeftAction: Int = Constants.SwipeAction.NULL,
+
+    @Setting(
+        title = "Swipe Left App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "PORTRAIT_SWIPE_LEFT_APP_JSON",
+    )
+    @Serialized
+    val portraitSwipeLeftApp: AppPreference = AppPreference(label = "Not set"),
+
+    @Persisted(key = "PORTRAIT_SWIPE_LEFT_FOLDER_ID")
+    val portraitSwipeLeftFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Right Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "PORTRAIT_SWIPE_RIGHT_ACTION",
+    )
+    val portraitSwipeRightAction: Int = Constants.SwipeAction.NULL,
+
+    @Setting(
+        title = "Swipe Right App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "PORTRAIT_SWIPE_RIGHT_APP_JSON",
+    )
+    @Serialized
+    val portraitSwipeRightApp: AppPreference = AppPreference(label = "Not set"),
+
+    @Persisted(key = "PORTRAIT_SWIPE_RIGHT_FOLDER_ID")
+    val portraitSwipeRightFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Down Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "LANDSCAPE_SWIPE_DOWN_ACTION",
+    )
+    val landscapeSwipeDownAction: Int = Constants.SwipeAction.NOTIFICATIONS,
+
+    @Setting(
+        title = "Swipe Down App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "LANDSCAPE_SWIPE_DOWN_APP_JSON",
+    )
+    @Serialized
+    val landscapeSwipeDownApp: AppPreference = AppPreference(),
+
+    @Persisted(key = "LANDSCAPE_SWIPE_DOWN_FOLDER_ID")
+    val landscapeSwipeDownFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Up Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "LANDSCAPE_SWIPE_UP_ACTION",
+    )
+    val landscapeSwipeUpAction: Int = Constants.SwipeAction.SEARCH,
+
+    @Setting(
+        title = "Swipe Up App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "LANDSCAPE_SWIPE_UP_APP_JSON",
+    )
+    @Serialized
+    val landscapeSwipeUpApp: AppPreference = AppPreference(),
+
+    @Persisted(key = "LANDSCAPE_SWIPE_UP_FOLDER_ID")
+    val landscapeSwipeUpFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Left Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "LANDSCAPE_SWIPE_LEFT_ACTION",
+    )
+    val landscapeSwipeLeftAction: Int = Constants.SwipeAction.NULL,
+
+    @Setting(
+        title = "Swipe Left App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "LANDSCAPE_SWIPE_LEFT_APP_JSON",
+    )
+    @Serialized
+    val landscapeSwipeLeftApp: AppPreference = AppPreference(label = "Not set"),
+
+    @Persisted(key = "LANDSCAPE_SWIPE_LEFT_FOLDER_ID")
+    val landscapeSwipeLeftFolderId: String = "",
+
+    @Setting(
+        title = "Swipe Right Action",
+        category = Gestures::class,
+        type = Dropdown::class,
+        options = ["None", "Search", "Notifications", "App", "Next Page", "Previous Page", "Open Folder", "Open Settings"],
+        key = "LANDSCAPE_SWIPE_RIGHT_ACTION",
+    )
+    val landscapeSwipeRightAction: Int = Constants.SwipeAction.NULL,
+
+    @Setting(
+        title = "Swipe Right App",
+        category = Gestures::class,
+        type = AppPicker::class,
+        key = "LANDSCAPE_SWIPE_RIGHT_APP_JSON",
+    )
+    @Serialized
+    val landscapeSwipeRightApp: AppPreference = AppPreference(label = "Not set"),
+
+    @Persisted(key = "LANDSCAPE_SWIPE_RIGHT_FOLDER_ID")
+    val landscapeSwipeRightFolderId: String = "",
+
     @Persisted(key = "CORNER_ZONE_TOP_LEFT_JSON")
     @Serialized
     val cornerZoneTopLeft: CornerZoneConfig = CornerZoneConfig(),
@@ -679,6 +930,64 @@ data class AppSettings(
     /** Show the danger-edge gradient fade on corner zones. */
     @Persisted(key = "CORNER_ZONE_DANGER_FADE")
     val cornerZoneDangerFade: Boolean = true,
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_TOP_LEFT_JSON")
+    @Serialized
+    val portraitCornerZoneTopLeft: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_TOP_RIGHT_JSON")
+    @Serialized
+    val portraitCornerZoneTopRight: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_BOTTOM_LEFT_JSON")
+    @Serialized
+    val portraitCornerZoneBottomLeft: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_BOTTOM_RIGHT_JSON")
+    @Serialized
+    val portraitCornerZoneBottomRight: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "PORTRAIT_APPLY_TO_ALL_CORNER_ZONES")
+    val portraitApplyToAllCornerZones: Boolean = false,
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_UNIVERSAL_JSON")
+    @Serialized
+    val portraitCornerZoneUniversal: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONES_IN_FOLDERS")
+    val portraitCornerZonesInFolders: Boolean = true,
+
+    @Persisted(key = "PORTRAIT_CORNER_ZONE_DANGER_FADE")
+    val portraitCornerZoneDangerFade: Boolean = true,
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_TOP_LEFT_JSON")
+    @Serialized
+    val landscapeCornerZoneTopLeft: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_TOP_RIGHT_JSON")
+    @Serialized
+    val landscapeCornerZoneTopRight: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_BOTTOM_LEFT_JSON")
+    @Serialized
+    val landscapeCornerZoneBottomLeft: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_BOTTOM_RIGHT_JSON")
+    @Serialized
+    val landscapeCornerZoneBottomRight: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "LANDSCAPE_APPLY_TO_ALL_CORNER_ZONES")
+    val landscapeApplyToAllCornerZones: Boolean = false,
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_UNIVERSAL_JSON")
+    @Serialized
+    val landscapeCornerZoneUniversal: CornerZoneConfig = CornerZoneConfig(),
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONES_IN_FOLDERS")
+    val landscapeCornerZonesInFolders: Boolean = true,
+
+    @Persisted(key = "LANDSCAPE_CORNER_ZONE_DANGER_FADE")
+    val landscapeCornerZoneDangerFade: Boolean = true,
 
     @Setting(
         title = "Show Folder Icon",
@@ -742,6 +1051,16 @@ data class AppSettings(
     @Persisted(key = "HOME_LAYOUT_JSON")
     @Serialized
     val homeLayout: HomeLayout = HomeLayout(),
+
+    @Persisted(key = "ORIENTATION_HOME_LAYOUTS_JSON")
+    @Serialized
+    val homeLayouts: OrientationHomeLayouts = OrientationHomeLayouts(),
+
+    @Persisted(key = "ORIENTATION_AWARE_HOME_MIGRATED")
+    val orientationAwareHomeMigrated: Boolean = false,
+
+    @Persisted(key = "LANDSCAPE_HOME_DEFAULT_FIX_APPLIED")
+    val landscapeHomeDefaultFixApplied: Boolean = false,
 )
 
 @Serializable
@@ -760,6 +1079,141 @@ data class AppKeyMigration(
     val moveKeys: Set<String> = emptySet(),
     val copyKeys: Set<String> = emptySet()
 )
+
+fun AppSettings.isLandscapeHomeAvailable(): Boolean =
+    landscapeLayoutEnabled || screenOrientation == 2
+
+fun AppSettings.resolveHomeOrientation(isCurrentlyLandscape: Boolean): HomeOrientation =
+    when (screenOrientation) {
+        1 -> HomeOrientation.PORTRAIT
+        2 -> HomeOrientation.LANDSCAPE
+        else -> if (isCurrentlyLandscape && isLandscapeHomeAvailable()) {
+            HomeOrientation.LANDSCAPE
+        } else {
+            HomeOrientation.PORTRAIT
+        }
+    }
+
+fun AppSettings.availableHomeOrientations(): List<HomeOrientation> =
+    buildList {
+        add(HomeOrientation.PORTRAIT)
+        if (isLandscapeHomeAvailable()) {
+            add(HomeOrientation.LANDSCAPE)
+        }
+    }
+
+fun AppSettings.homeRowsFor(orientation: HomeOrientation): Int =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitHomeScreenRows
+        HomeOrientation.LANDSCAPE -> landscapeHomeScreenRows
+    }
+
+fun AppSettings.homeColumnsFor(orientation: HomeOrientation): Int =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitHomeScreenColumns
+        HomeOrientation.LANDSCAPE -> landscapeHomeScreenColumns
+    }
+
+fun AppSettings.homePagesFor(orientation: HomeOrientation): Int =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitHomeScreenPages
+        HomeOrientation.LANDSCAPE -> landscapeHomeScreenPages
+    }
+
+fun AppSettings.swipeActionFor(orientation: HomeOrientation, direction: String): Int =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> when (direction) {
+            "up" -> portraitSwipeUpAction
+            "down" -> portraitSwipeDownAction
+            "left" -> portraitSwipeLeftAction
+            "right" -> portraitSwipeRightAction
+            else -> Constants.SwipeAction.NULL
+        }
+        HomeOrientation.LANDSCAPE -> when (direction) {
+            "up" -> landscapeSwipeUpAction
+            "down" -> landscapeSwipeDownAction
+            "left" -> landscapeSwipeLeftAction
+            "right" -> landscapeSwipeRightAction
+            else -> Constants.SwipeAction.NULL
+        }
+    }
+
+fun AppSettings.swipeAppFor(orientation: HomeOrientation, direction: String): AppPreference =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> when (direction) {
+            "up" -> portraitSwipeUpApp
+            "down" -> portraitSwipeDownApp
+            "left" -> portraitSwipeLeftApp
+            "right" -> portraitSwipeRightApp
+            else -> AppPreference()
+        }
+        HomeOrientation.LANDSCAPE -> when (direction) {
+            "up" -> landscapeSwipeUpApp
+            "down" -> landscapeSwipeDownApp
+            "left" -> landscapeSwipeLeftApp
+            "right" -> landscapeSwipeRightApp
+            else -> AppPreference()
+        }
+    }
+
+fun AppSettings.swipeFolderIdFor(orientation: HomeOrientation, direction: String): String =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> when (direction) {
+            "up" -> portraitSwipeUpFolderId
+            "down" -> portraitSwipeDownFolderId
+            "left" -> portraitSwipeLeftFolderId
+            "right" -> portraitSwipeRightFolderId
+            else -> ""
+        }
+        HomeOrientation.LANDSCAPE -> when (direction) {
+            "up" -> landscapeSwipeUpFolderId
+            "down" -> landscapeSwipeDownFolderId
+            "left" -> landscapeSwipeLeftFolderId
+            "right" -> landscapeSwipeRightFolderId
+            else -> ""
+        }
+    }
+
+fun AppSettings.cornerConfigFor(orientation: HomeOrientation, corner: Int): CornerZoneConfig =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> when (corner) {
+            Constants.CornerPosition.TOP_LEFT -> portraitCornerZoneTopLeft
+            Constants.CornerPosition.TOP_RIGHT -> portraitCornerZoneTopRight
+            Constants.CornerPosition.BOTTOM_LEFT -> portraitCornerZoneBottomLeft
+            else -> portraitCornerZoneBottomRight
+        }
+        HomeOrientation.LANDSCAPE -> when (corner) {
+            Constants.CornerPosition.TOP_LEFT -> landscapeCornerZoneTopLeft
+            Constants.CornerPosition.TOP_RIGHT -> landscapeCornerZoneTopRight
+            Constants.CornerPosition.BOTTOM_LEFT -> landscapeCornerZoneBottomLeft
+            else -> landscapeCornerZoneBottomRight
+        }
+    }
+
+fun AppSettings.cornerUniversalConfigFor(orientation: HomeOrientation): CornerZoneConfig =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitCornerZoneUniversal
+        HomeOrientation.LANDSCAPE -> landscapeCornerZoneUniversal
+    }
+
+fun AppSettings.applyToAllCornerZonesFor(orientation: HomeOrientation): Boolean =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitApplyToAllCornerZones
+        HomeOrientation.LANDSCAPE -> landscapeApplyToAllCornerZones
+    }
+
+fun AppSettings.cornerZonesInFoldersFor(orientation: HomeOrientation): Boolean =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitCornerZonesInFolders
+        HomeOrientation.LANDSCAPE -> landscapeCornerZonesInFolders
+    }
+
+fun AppSettings.cornerZoneDangerFadeFor(orientation: HomeOrientation): Boolean =
+    when (orientation) {
+        HomeOrientation.PORTRAIT -> portraitCornerZoneDangerFade
+        HomeOrientation.LANDSCAPE -> landscapeCornerZoneDangerFade
+    }
+
 @CategoryDefinition(order = 0) object General
 @CategoryDefinition(order = 1) object Appearance
 @CategoryDefinition(order = 2) object Layout

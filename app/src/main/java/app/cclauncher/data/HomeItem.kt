@@ -5,6 +5,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.util.UUID
 
+enum class HomeOrientation {
+    PORTRAIT,
+    LANDSCAPE,
+}
+
 @Serializable
 @Immutable
 sealed class HomeItem {
@@ -180,4 +185,22 @@ data class HomeLayout(
     fun isPageEmpty(page: Int): Boolean = items.none { it.page == page }
 
     fun lastNonEmptyPage(): Int = items.maxOfOrNull { it.page } ?: 0
+}
+
+@Serializable
+data class OrientationHomeLayouts(
+    val portrait: HomeLayout = HomeLayout(),
+    val landscape: HomeLayout = HomeLayout(),
+) {
+    fun layoutFor(orientation: HomeOrientation): HomeLayout =
+        when (orientation) {
+            HomeOrientation.PORTRAIT -> portrait
+            HomeOrientation.LANDSCAPE -> landscape
+        }
+
+    fun withLayout(orientation: HomeOrientation, layout: HomeLayout): OrientationHomeLayouts =
+        when (orientation) {
+            HomeOrientation.PORTRAIT -> copy(portrait = layout)
+            HomeOrientation.LANDSCAPE -> copy(landscape = layout)
+        }
 }

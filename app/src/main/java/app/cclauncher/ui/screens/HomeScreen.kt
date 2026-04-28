@@ -3,6 +3,7 @@ package app.cclauncher.ui.screens
 import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
@@ -20,15 +21,19 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
@@ -97,6 +102,7 @@ import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationExceptio
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalConfiguration
 import app.cclauncher.settings.CornerZoneConfig
 import kotlin.math.abs
 import kotlinx.coroutines.withTimeout
@@ -125,6 +131,13 @@ import app.cclauncher.helper.getScreenDimensions
 import app.cclauncher.helper.showToast
 import app.cclauncher.helper.withResolvedUser
 import app.cclauncher.settings.AppSettings
+import app.cclauncher.settings.applyToAllCornerZonesFor
+import app.cclauncher.settings.cornerConfigFor
+import app.cclauncher.settings.cornerUniversalConfigFor
+import app.cclauncher.settings.cornerZoneDangerFadeFor
+import app.cclauncher.settings.cornerZonesInFoldersFor
+import app.cclauncher.settings.swipeActionFor
+import app.cclauncher.settings.swipeFolderIdFor
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ContextMenuItemRow
@@ -149,11 +162,17 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit,
 ) {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val coroutineScope = rememberCoroutineScope()
     val homeLayoutState by viewModel.homeLayoutState.collectAsState()
-    val homeFolders by remember { derivedStateOf { homeLayoutState.items.filterIsInstance<HomeItem.Folder>() } }
+    val homeFolders by remember(homeLayoutState.items) { derivedStateOf { viewModel.getAllFolders() } }
     val settings by settingsViewModel.settingsState.collectAsState()
     val currentPage by viewModel.currentPage.collectAsState()
+    val activeOrientation by viewModel.activeHomeOrientation.collectAsState()
+
+    LaunchedEffect(configuration.orientation) {
+        viewModel.updateActiveHomeOrientation(configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    }
 
     val pagerState = rememberPagerState(
         initialPage = currentPage,
@@ -251,19 +270,19 @@ fun HomeScreen(
 
     val onSwipeUp: () -> Unit = {
         if (openFolderId == null || settings.swipeGesturesInFolders)
-            handleSwipeAction(settings.swipeUpAction, { viewModel.launchSwipeUpApp() }, settings.swipeUpFolderId)
+            handleSwipeAction(settings.swipeActionFor(activeOrientation, "up"), { viewModel.launchSwipeUpApp() }, settings.swipeFolderIdFor(activeOrientation, "up"))
     }
     val onSwipeDown: () -> Unit = {
         if (openFolderId == null || settings.swipeGesturesInFolders)
-            handleSwipeAction(settings.swipeDownAction, { viewModel.launchSwipeDownApp() }, settings.swipeDownFolderId)
+            handleSwipeAction(settings.swipeActionFor(activeOrientation, "down"), { viewModel.launchSwipeDownApp() }, settings.swipeFolderIdFor(activeOrientation, "down"))
     }
     val onSwipeLeft: () -> Unit = {
         if (openFolderId == null || settings.swipeGesturesInFolders)
-            handleSwipeAction(settings.swipeLeftAction, { viewModel.launchSwipeLeftApp() }, settings.swipeLeftFolderId)
+            handleSwipeAction(settings.swipeActionFor(activeOrientation, "left"), { viewModel.launchSwipeLeftApp() }, settings.swipeFolderIdFor(activeOrientation, "left"))
     }
     val onSwipeRight: () -> Unit = {
         if (openFolderId == null || settings.swipeGesturesInFolders)
-            handleSwipeAction(settings.swipeRightAction, { viewModel.launchSwipeRightApp() }, settings.swipeRightFolderId)
+            handleSwipeAction(settings.swipeActionFor(activeOrientation, "right"), { viewModel.launchSwipeRightApp() }, settings.swipeFolderIdFor(activeOrientation, "right"))
     }
 
     // Simple movement tracking - no overlay needed
@@ -750,9 +769,10 @@ fun HomeScreen(
         }
 
         // Corner shortcut zones — hidden while a folder is open if the setting is off
-        if (openFolderId == null || settings.cornerZonesInFolders) {
+        if (openFolderId == null || settings.cornerZonesInFoldersFor(activeOrientation)) {
             HomeCornerZones(
                 settings = settings,
+                activeOrientation = activeOrientation,
                 onOpenFolder = { folderId -> openFolderId = if (openFolderId == folderId) null else folderId },
                 onAction = { action -> handleSwipeAction(action, {}) },
             )
@@ -1102,6 +1122,19 @@ private fun PageIndicator(
 }
 
 @Composable
+private fun ScrollableDialogMenu(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 360.dp)
+            .verticalScroll(rememberScrollState()),
+        content = content,
+    )
+}
+
+@Composable
 fun WidgetContextMenu(
     widgetItem: HomeItem.Widget?,
     pageCount: Int = 1,
@@ -1160,7 +1193,7 @@ fun WidgetContextMenu(
                 }
             },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     if (isBeingMoved) {
                         ContextMenuItemRow(
                             text = "Cancel Move",
@@ -1361,7 +1394,7 @@ fun HomeAppContextMenu(
             onDismissRequest = { showFontMenu = false },
             title = { Text("Select Font") },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Select Font...",
                         icon = Icons.Default.TextFields,
@@ -1391,7 +1424,7 @@ fun HomeAppContextMenu(
             onDismissRequest = { showCustomizeMenu = false },
             title = { Text("Customize") },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Text Size...",
                         icon = Icons.Default.TextFields,
@@ -1453,7 +1486,7 @@ fun HomeAppContextMenu(
             onDismissRequest = { showFolderPicker = false },
             title = { Text("Add to Folder") },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     folders.forEach { folder ->
                         ContextMenuItemRow(
                             text = "${folder.title} (${folder.apps.size} apps)",
@@ -1489,7 +1522,7 @@ fun HomeAppContextMenu(
                 }
             },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Move",
                         icon = Icons.Default.OpenWith,
@@ -1703,6 +1736,7 @@ private const val TOP_ZONE_SWIPE_DOWN_DWELL_MS = 120L
 @Composable
 private fun HomeCornerZones(
     settings: AppSettings,
+    activeOrientation: app.cclauncher.data.HomeOrientation,
     onOpenFolder: (String) -> Unit,
     onAction: (Int) -> Unit,
 ) {
@@ -1726,10 +1760,10 @@ private fun HomeCornerZones(
     }
 
     val zones = listOf(
-        settings.cornerZoneTopLeft,
-        settings.cornerZoneTopRight,
-        settings.cornerZoneBottomLeft,
-        settings.cornerZoneBottomRight,
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_LEFT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_RIGHT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_LEFT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_RIGHT),
     )
     val alignments = listOf(
         Alignment.TopStart,
@@ -1745,8 +1779,8 @@ private fun HomeCornerZones(
                 if (exclusionRects.remove(cornerPos) != null) pushExclusionRects()
                 return@forEachIndexed
             }
-            val config = if (settings.applyToAllCornerZones) {
-                val u = settings.cornerZoneUniversal
+            val config = if (settings.applyToAllCornerZonesFor(activeOrientation)) {
+                val u = settings.cornerUniversalConfigFor(activeOrientation)
                 rawConfig.copy(
                     size = u.size, color = u.color, opacity = u.opacity, visible = u.visible,
                     borderEnabled = u.borderEnabled, borderColor = u.borderColor, borderWidth = u.borderWidth,
@@ -1757,7 +1791,7 @@ private fun HomeCornerZones(
                 config = config,
                 alignment = alignments[cornerPos],
                 cornerPos = cornerPos,
-                showDangerFade = settings.cornerZoneDangerFade,
+                showDangerFade = settings.cornerZoneDangerFadeFor(activeOrientation),
                 onBoundsChanged = { rect ->
                     if (rect != null) exclusionRects[cornerPos] = rect
                     else exclusionRects.remove(cornerPos)
@@ -2177,7 +2211,7 @@ fun FolderContextMenu(
             onDismissRequest = { showFontMenu = false },
             title = { Text("Select Font") },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Select Font...",
                         icon = Icons.Default.TextFields,
@@ -2199,7 +2233,7 @@ fun FolderContextMenu(
             onDismissRequest = { showCustomizeMenu = false },
             title = { Text("Customize") },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Text Size...",
                         icon = Icons.Default.TextFields,
@@ -2263,7 +2297,7 @@ fun FolderContextMenu(
                 }
             },
             text = {
-                Column {
+                ScrollableDialogMenu {
                     ContextMenuItemRow(
                         text = "Move",
                         icon = Icons.Default.OpenWith,

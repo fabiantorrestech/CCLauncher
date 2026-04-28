@@ -1,11 +1,13 @@
 package app.cclauncher.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.HomeItem
+import app.cclauncher.data.HomeOrientation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,10 +48,11 @@ fun FolderListScreen(
     onNavigateToFolder: (String) -> Unit,
 ) {
     val homeLayout by viewModel.homeLayoutState.collectAsState()
-    val folders = homeLayout.items.filterIsInstance<HomeItem.Folder>()
+    val folders = remember(homeLayout.items) { viewModel.getAllFolders() }
 
     var showCreateDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
+    var pendingCreateOrientationPrompt by remember { mutableStateOf(false) }
 
     if (showCreateDialog) {
         AlertDialog(
@@ -67,9 +71,13 @@ fun FolderListScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.addFolderToHomeScreen(newFolderName)
-                    showCreateDialog = false
-                    newFolderName = ""
+                    if (viewModel.availableHomeOrientations().size > 1) {
+                        pendingCreateOrientationPrompt = true
+                    } else {
+                        viewModel.addFolderToHomeScreen(newFolderName)
+                        showCreateDialog = false
+                        newFolderName = ""
+                    }
                 }) { Text("Create") }
             },
             dismissButton = {
@@ -78,6 +86,41 @@ fun FolderListScreen(
                     newFolderName = ""
                 }) { Text("Cancel") }
             }
+        )
+    }
+
+    if (pendingCreateOrientationPrompt) {
+        AlertDialog(
+            onDismissRequest = { pendingCreateOrientationPrompt = false },
+            title = { Text("Place Folder On Home") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Choose where to place this folder tile.")
+                    Text(
+                        "The folder contents stay shared, but portrait and landscape positions are separate.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        viewModel.addFolderToHomeScreen(newFolderName, HomeOrientation.PORTRAIT)
+                        pendingCreateOrientationPrompt = false
+                        showCreateDialog = false
+                        newFolderName = ""
+                    }) { Text("Add to Portrait") }
+                    TextButton(onClick = {
+                        viewModel.addFolderToHomeScreen(newFolderName, HomeOrientation.LANDSCAPE)
+                        pendingCreateOrientationPrompt = false
+                        showCreateDialog = false
+                        newFolderName = ""
+                    }) { Text("Add to Landscape") }
+                    TextButton(onClick = { pendingCreateOrientationPrompt = false }) { Text("Cancel") }
+                }
+            },
+            dismissButton = {}
         )
     }
 

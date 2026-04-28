@@ -8,6 +8,14 @@ object Constants {
     const val FLAG_SET_SWIPE_RIGHT_APP = 18
     const val FLAG_SET_SWIPE_UP_APP = 19
     const val FLAG_SET_SWIPE_DOWN_APP = 20
+    const val FLAG_SET_PORTRAIT_SWIPE_LEFT_APP = 21
+    const val FLAG_SET_PORTRAIT_SWIPE_RIGHT_APP = 22
+    const val FLAG_SET_PORTRAIT_SWIPE_UP_APP = 23
+    const val FLAG_SET_PORTRAIT_SWIPE_DOWN_APP = 24
+    const val FLAG_SET_LANDSCAPE_SWIPE_LEFT_APP = 25
+    const val FLAG_SET_LANDSCAPE_SWIPE_RIGHT_APP = 26
+    const val FLAG_SET_LANDSCAPE_SWIPE_UP_APP = 27
+    const val FLAG_SET_LANDSCAPE_SWIPE_DOWN_APP = 28
 
     const val HINT_RATE_US = 25
     const val CUSTOM_FONT_FILENAME = "custom_font.ttf"

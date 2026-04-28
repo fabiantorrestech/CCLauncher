@@ -1,5 +1,6 @@
 package app.cclauncher.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -56,6 +57,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -63,9 +65,15 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
+import app.cclauncher.data.HomeOrientation
 import app.cclauncher.data.HomeItem
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.settings.CornerZoneConfig
+import app.cclauncher.settings.applyToAllCornerZonesFor
+import app.cclauncher.settings.cornerUniversalConfigFor
+import app.cclauncher.settings.cornerZoneDangerFadeFor
+import app.cclauncher.settings.cornerZonesInFoldersFor
+import app.cclauncher.settings.cornerConfigFor
 import app.cclauncher.settings.ZoneSwipeConfig
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ColorPickerDialog
@@ -84,6 +92,12 @@ private val SWIPE_DIR_LABELS = mapOf(
     Constants.ZoneSwipeDir.DOWN  to "Swipe Down",
 )
 
+private fun HomeOrientation.label(): String =
+    when (this) {
+        HomeOrientation.PORTRAIT -> "Portrait"
+        HomeOrientation.LANDSCAPE -> "Landscape"
+    }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CornerZoneSettingsScreen(
@@ -93,14 +107,20 @@ fun CornerZoneSettingsScreen(
 ) {
     val settings by settingsViewModel.settingsState.collectAsState()
     val homeLayout by mainViewModel.homeLayoutState.collectAsState()
-    val allFolders = remember(homeLayout.items) { homeLayout.items.filterIsInstance<HomeItem.Folder>() }
+    val configuration = LocalConfiguration.current
+    val activeOrientation by mainViewModel.activeHomeOrientation.collectAsState()
+    val allFolders = remember(homeLayout.items) { mainViewModel.getAllFolders() }
     val coroutineScope = rememberCoroutineScope()
 
+    LaunchedEffect(configuration.orientation) {
+        mainViewModel.updateActiveHomeOrientation(configuration.orientation == Configuration.ORIENTATION_LANDSCAPE)
+    }
+
     val cornerConfigs = listOf(
-        settings.cornerZoneTopLeft,
-        settings.cornerZoneTopRight,
-        settings.cornerZoneBottomLeft,
-        settings.cornerZoneBottomRight,
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_LEFT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_RIGHT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_LEFT),
+        settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_RIGHT),
     )
 
     fun updateCornerConfig(corner: Int, config: CornerZoneConfig) {
@@ -126,7 +146,7 @@ fun CornerZoneSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Corner Zone Shortcuts") },
+                title = { Text("${activeOrientation.label()} Corner Zones") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -136,7 +156,7 @@ fun CornerZoneSettingsScreen(
         }
     ) { innerPadding ->
         if (previewCountdown > 0) {
-            CornerZoneLivePreview(settings = settings)
+            CornerZoneLivePreview(settings = settings, activeOrientation = activeOrientation)
         }
 
         LazyColumn(
@@ -198,9 +218,9 @@ fun CornerZoneSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Preview on Screen", style = MaterialTheme.typography.labelLarge)
+                        Text("${activeOrientation.label()} Preview", style = MaterialTheme.typography.labelLarge)
                         Text(
-                            "Show zones in their actual positions for 3 seconds",
+                            "Show ${activeOrientation.label().lowercase()} zones on screen for 3 seconds",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
@@ -226,16 +246,22 @@ fun CornerZoneSettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Apply Appearance to All", style = MaterialTheme.typography.labelLarge)
                         Text(
-                            "Control all zone appearances from one place",
+                            "Control all ${activeOrientation.label().lowercase()} zone appearances from one place",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
                     Switch(
-                        checked = settings.applyToAllCornerZones,
+                        checked = settings.applyToAllCornerZonesFor(activeOrientation),
                         onCheckedChange = {
                             coroutineScope.launch {
-                                settingsViewModel.updateSetting("applyToAllCornerZones", it)
+                                settingsViewModel.updateSetting(
+                                    when (activeOrientation) {
+                                        HomeOrientation.PORTRAIT -> "portraitApplyToAllCornerZones"
+                                        HomeOrientation.LANDSCAPE -> "landscapeApplyToAllCornerZones"
+                                    },
+                                    it
+                                )
                             }
                         }
                     )
@@ -254,16 +280,22 @@ fun CornerZoneSettingsScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Active Inside Folders", style = MaterialTheme.typography.labelLarge)
                         Text(
-                            "Keep corner zones active when a folder is open",
+                            "Keep ${activeOrientation.label().lowercase()} corner zones active when a folder is open",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
                     Switch(
-                        checked = settings.cornerZonesInFolders,
+                        checked = settings.cornerZonesInFoldersFor(activeOrientation),
                         onCheckedChange = {
                             coroutineScope.launch {
-                                settingsViewModel.updateSetting("cornerZonesInFolders", it)
+                                settingsViewModel.updateSetting(
+                                    when (activeOrientation) {
+                                        HomeOrientation.PORTRAIT -> "portraitCornerZonesInFolders"
+                                        HomeOrientation.LANDSCAPE -> "landscapeCornerZonesInFolders"
+                                    },
+                                    it
+                                )
                             }
                         }
                     )
@@ -280,18 +312,24 @@ fun CornerZoneSettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Danger Zone Fade", style = MaterialTheme.typography.labelLarge)
+                        Text("Danger Edge Fade", style = MaterialTheme.typography.labelLarge)
                         Text(
-                            "Show a subtle gradient on the edges that may conflict with system gestures",
+                            "Show a subtle gradient where ${activeOrientation.label().lowercase()} zones may conflict with system gestures",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         )
                     }
                     Switch(
-                        checked = settings.cornerZoneDangerFade,
+                        checked = settings.cornerZoneDangerFadeFor(activeOrientation),
                         onCheckedChange = {
                             coroutineScope.launch {
-                                settingsViewModel.updateSetting("cornerZoneDangerFade", it)
+                                settingsViewModel.updateSetting(
+                                    when (activeOrientation) {
+                                        HomeOrientation.PORTRAIT -> "portraitCornerZoneDangerFade"
+                                        HomeOrientation.LANDSCAPE -> "landscapeCornerZoneDangerFade"
+                                    },
+                                    it
+                                )
                             }
                         }
                     )
@@ -300,22 +338,22 @@ fun CornerZoneSettingsScreen(
                 Spacer(Modifier.height(4.dp))
             }
 
-            if (settings.applyToAllCornerZones) {
+            if (settings.applyToAllCornerZonesFor(activeOrientation)) {
                 // Universal appearance card
                 item {
                     Text(
-                        "Universal Appearance",
+                        "${activeOrientation.label()} Universal Appearance",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                     Text(
-                        "These appearance settings apply to all enabled corner zones",
+                        "These appearance settings apply to all enabled ${activeOrientation.label().lowercase()} corner zones",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
                     CornerZoneAppearanceCard(
-                        config = settings.cornerZoneUniversal,
+                        config = settings.cornerUniversalConfigFor(activeOrientation),
                         onUpdate = { updated -> updateUniversalConfig(updated) },
                     )
                     Spacer(Modifier.height(8.dp))
@@ -327,7 +365,7 @@ fun CornerZoneSettingsScreen(
                         modifier = Modifier.padding(bottom = 4.dp),
                     )
                     Text(
-                        "Enable/disable each corner and set its actions independently",
+                        "Enable each ${activeOrientation.label().lowercase()} corner and set its actions independently",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                     )
@@ -368,15 +406,15 @@ fun CornerZoneSettingsScreen(
 }
 
 @Composable
-private fun CornerZoneLivePreview(settings: AppSettings) {
+private fun CornerZoneLivePreview(settings: AppSettings, activeOrientation: HomeOrientation) {
     val view = LocalView.current
     val density = LocalDensity.current
 
     val zones = listOf(
-        Alignment.TopStart    to settings.cornerZoneTopLeft,
-        Alignment.TopEnd      to settings.cornerZoneTopRight,
-        Alignment.BottomStart to settings.cornerZoneBottomLeft,
-        Alignment.BottomEnd   to settings.cornerZoneBottomRight,
+        Alignment.TopStart    to settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_LEFT),
+        Alignment.TopEnd      to settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.TOP_RIGHT),
+        Alignment.BottomStart to settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_LEFT),
+        Alignment.BottomEnd   to settings.cornerConfigFor(activeOrientation, Constants.CornerPosition.BOTTOM_RIGHT),
     )
     val cornerPositions = listOf(
         Constants.CornerPosition.TOP_LEFT,
@@ -397,8 +435,8 @@ private fun CornerZoneLivePreview(settings: AppSettings) {
         Box(modifier = Modifier.size(screenWidth, screenHeight)) {
             zones.forEachIndexed { index, (alignment, rawConfig) ->
                 if (!rawConfig.enabled) return@forEachIndexed
-                val config = if (settings.applyToAllCornerZones) {
-                    val u = settings.cornerZoneUniversal
+                val config = if (settings.applyToAllCornerZonesFor(activeOrientation)) {
+                    val u = settings.cornerUniversalConfigFor(activeOrientation)
                     rawConfig.copy(
                         size = u.size, color = u.color, opacity = u.opacity, visible = u.visible,
                         borderEnabled = u.borderEnabled, borderColor = u.borderColor, borderWidth = u.borderWidth,

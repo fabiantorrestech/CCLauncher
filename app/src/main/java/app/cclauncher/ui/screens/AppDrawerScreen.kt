@@ -97,6 +97,7 @@ import app.cclauncher.data.AppShortcut
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
 import app.cclauncher.data.HomeItem
+import app.cclauncher.data.HomeOrientation
 import app.cclauncher.helper.isSystemApp
 import app.cclauncher.helper.openAppInfo
 import app.cclauncher.helper.openSearch
@@ -113,6 +114,12 @@ import app.cclauncher.ui.viewmodels.SettingsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.yield
 import org.koin.androidx.compose.koinViewModel
+
+private data class AppDrawerMenuAction(
+    val text: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val onClick: () -> Unit,
+)
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -131,7 +138,7 @@ fun AppDrawerScreen(
     val uiState by viewModel.appDrawerState.collectAsState()
     val settings by settingsViewModel.settingsState.collectAsState()
     val homeLayoutState by viewModel.homeLayoutState.collectAsState()
-    val homeFolders by remember { derivedStateOf { homeLayoutState.items.filterIsInstance<HomeItem.Folder>() } }
+    val homeFolders by remember(homeLayoutState.items) { derivedStateOf { viewModel.getAllFolders() } }
 
     val searchQuery = uiState.searchQuery
     val focusRequester = remember { FocusRequester() }
@@ -178,6 +185,7 @@ fun AppDrawerScreen(
     var showContextMenu by remember { mutableStateOf(false) }
     var showTagsEditor by remember { mutableStateOf(false) }
     var showFolderPickerForApp by remember { mutableStateOf<AppModel?>(null) }
+    var pendingAddToHomeApp by remember { mutableStateOf<AppModel?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -217,6 +225,45 @@ fun AppDrawerScreen(
 
             onAppClick(app)
         }
+    }
+
+    val requestAddToHome: (AppModel) -> Unit = { app ->
+        if (viewModel.availableHomeOrientations().size > 1) {
+            pendingAddToHomeApp = app
+        } else {
+            viewModel.addAppToHomeScreen(app)
+        }
+    }
+
+    pendingAddToHomeApp?.let { app ->
+        AlertDialog(
+            onDismissRequest = { pendingAddToHomeApp = null },
+            title = { Text("Add to Home Screen") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Choose where to place ${app.appLabel}.")
+                    Text(
+                        "Portrait and landscape homes are separate.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
+                }
+            },
+            confirmButton = {
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        viewModel.addAppToHomeScreen(app, HomeOrientation.PORTRAIT)
+                        pendingAddToHomeApp = null
+                    }) { Text("Add to Portrait") }
+                    TextButton(onClick = {
+                        viewModel.addAppToHomeScreen(app, HomeOrientation.LANDSCAPE)
+                        pendingAddToHomeApp = null
+                    }) { Text("Add to Landscape") }
+                    TextButton(onClick = { pendingAddToHomeApp = null }) { Text("Cancel") }
+                }
+            },
+            dismissButton = {}
+        )
     }
 
     LaunchedEffect(Unit) { viewModel.loadApps() }
@@ -615,8 +662,105 @@ fun AppDrawerScreen(
 
         var renameDialogVisible by remember { mutableStateOf(false) }
         var newAppName by remember { mutableStateOf(app.appLabel) }
+        val contextMenuListState = rememberLazyListState()
 
         val dismissMenu = { showContextMenu = false; selectedApp = null }
+        val privateSpaceUnlocked =
+            viewModel.isPrivateSpaceSupported &&
+                viewModel.privateSpaceState.collectAsState().value == MainViewModel.PrivateSpaceState.Unlocked
+        val menuActions = buildList {
+            if (isSystemShortcut) {
+                add(AppDrawerMenuAction("Open", Icons.Default.AdsClick) {
+                    handleAppClick(app)
+                    dismissMenu()
+                })
+                add(AppDrawerMenuAction("Rename", Icons.Default.DriveFileRenameOutline) {
+                    renameDialogVisible = true
+                })
+                add(AppDrawerMenuAction("Tags...", Icons.Default.Search) {
+                    showTagsEditor = true
+                })
+                add(AppDrawerMenuAction("Add to Home Screen", Icons.Default.Add) {
+                    requestAddToHome(app)
+                    dismissMenu()
+                })
+                add(AppDrawerMenuAction("App Info", Icons.Default.Info) {
+                    openAppInfo(context, app)
+                    dismissMenu()
+                })
+                if (homeFolders.isNotEmpty()) {
+                    add(AppDrawerMenuAction("Add to Folder...", Icons.Default.Folder) {
+                        showFolderPickerForApp = app
+                        dismissMenu()
+                    })
+                }
+                add(AppDrawerMenuAction("Delete", Icons.Default.Delete) {
+                    viewModel.deleteSystemShortcut(app)
+                    dismissMenu()
+                })
+            } else {
+                add(AppDrawerMenuAction("Open", Icons.Default.AdsClick) {
+                    handleAppClick(app)
+                    dismissMenu()
+                })
+                add(AppDrawerMenuAction(if (isHidden) "Unhide" else "Hide", Icons.Default.Settings) {
+                    viewModel.toggleAppHidden(app)
+                    dismissMenu()
+                })
+                add(AppDrawerMenuAction("Rename", Icons.Default.DriveFileRenameOutline) {
+                    renameDialogVisible = true
+                })
+                add(AppDrawerMenuAction("Tags...", Icons.Default.Search) {
+                    showTagsEditor = true
+                })
+                add(AppDrawerMenuAction("App Info", Icons.Default.Info) {
+                    openAppInfo(context, app)
+                    dismissMenu()
+                })
+                if (canUninstall) {
+                    add(AppDrawerMenuAction("Uninstall", Icons.Default.DeleteOutline) {
+                        context.uninstall(app.appPackage)
+                        dismissMenu()
+                    })
+                }
+                add(AppDrawerMenuAction("Add to Home Screen", Icons.Default.Add) {
+                    requestAddToHome(app)
+                    dismissMenu()
+                })
+                if (homeFolders.isNotEmpty()) {
+                    add(AppDrawerMenuAction("Add to Folder...", Icons.Default.Folder) {
+                        showFolderPickerForApp = app
+                        dismissMenu()
+                    })
+                }
+                if (supportsShortcuts && !selectionMode) {
+                    add(AppDrawerMenuAction("Shortcuts", Icons.Default.SubdirectoryArrowRight) {
+                        shortcutsDialogApp = app
+                        shortcutsLoading = true
+                        appShortcuts = emptyList()
+                        viewModel.getAppShortcuts(app) { shortcuts ->
+                            if (shortcutsDialogApp?.getKey() == app.getKey()) {
+                                appShortcuts = shortcuts
+                                shortcutsLoading = false
+                            }
+                        }
+                        dismissMenu()
+                    })
+                }
+                if (privateSpaceUnlocked) {
+                    val isInPrivateSpace = viewModel.isAppInPrivateSpace(app)
+                    add(
+                        AppDrawerMenuAction(
+                            if (isInPrivateSpace) "Remove from Private Space" else "Add to Private Space",
+                            Icons.Default.Lock
+                        ) {
+                            viewModel.toggleAppInPrivateSpace(app)
+                            dismissMenu()
+                        }
+                    )
+                }
+            }
+        }
 
         if (showTagsEditor) {
             AppTagsEditorDialog(
@@ -647,101 +791,11 @@ fun AppDrawerScreen(
                 }
             },
             text = {
-                Column {
-                    if (isSystemShortcut) {
-                        ContextMenuItemRow("Open", Icons.Default.AdsClick, onClick = {
-                            handleAppClick(app)
-                            dismissMenu()
-                        })
-                        ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
-                            renameDialogVisible = true
-                        })
-                        ContextMenuItemRow("Tags...", Icons.Default.Search, onClick = {
-                            showTagsEditor = true
-                        })
-                        ContextMenuItemRow("Add to Home Screen", Icons.Default.Add, onClick = {
-                            viewModel.addAppToHomeScreen(app)
-                            dismissMenu()
-                        })
-                        ContextMenuItemRow("App Info", Icons.Default.Info, onClick = {
-                            openAppInfo(context, app)
-                            dismissMenu()
-                        })
-                        if (homeFolders.isNotEmpty()) {
-                            ContextMenuItemRow("Add to Folder...", Icons.Default.Folder, onClick = {
-                                showFolderPickerForApp = app
-                                dismissMenu()
-                            })
-                        }
-                        ContextMenuItemRow("Delete", Icons.Default.Delete, onClick = {
-                            viewModel.deleteSystemShortcut(app)
-                            dismissMenu()
-                        })
-                    } else {
-                        ContextMenuItemRow("Open", Icons.Default.AdsClick, onClick = {
-                            handleAppClick(app)
-                            dismissMenu()
-                        })
-                        ContextMenuItemRow(if (isHidden) "Unhide" else "Hide", Icons.Default.Settings, onClick = {
-                            viewModel.toggleAppHidden(app)
-                            dismissMenu()
-                        })
-                        ContextMenuItemRow("Rename", Icons.Default.DriveFileRenameOutline, onClick = {
-                            renameDialogVisible = true
-                        })
-                        ContextMenuItemRow("Tags...", Icons.Default.Search, onClick = {
-                            showTagsEditor = true
-                        })
-                        ContextMenuItemRow("App Info", Icons.Default.Info, onClick = {
-                            openAppInfo(context, app)
-                            dismissMenu()
-                        })
-                        if (canUninstall) {
-                            ContextMenuItemRow("Uninstall", Icons.Default.DeleteOutline, onClick = {
-                                context.uninstall(app.appPackage)
-                                dismissMenu()
-                            })
-                        }
-                        ContextMenuItemRow("Add to Home Screen", Icons.Default.Add, onClick = {
-                            viewModel.addAppToHomeScreen(app)
-                            dismissMenu()
-                        })
-                        if (homeFolders.isNotEmpty()) {
-                            ContextMenuItemRow("Add to Folder...", Icons.Default.Folder, onClick = {
-                                showFolderPickerForApp = app
-                                dismissMenu()
-                            })
-                        }
-                        if (supportsShortcuts && !selectionMode) {
-                            ContextMenuItemRow("Shortcuts", Icons.Default.SubdirectoryArrowRight, onClick = {
-                                shortcutsDialogApp = app
-                                shortcutsLoading = true
-                                appShortcuts = emptyList()
-                                viewModel.getAppShortcuts(app) { shortcuts ->
-                                    if (shortcutsDialogApp?.getKey() == app.getKey()) {
-                                        appShortcuts = shortcuts
-                                        shortcutsLoading = false
-                                    }
-                                }
-                                dismissMenu()
-                            })
-                        }
-                        if (viewModel.isPrivateSpaceSupported &&
-                            viewModel.privateSpaceState.collectAsState().value == MainViewModel.PrivateSpaceState.Unlocked) {
-
-                            val isInPrivateSpace = viewModel.isAppInPrivateSpace(app)
-
-                            ContextMenuItemRow(
-                                text = if (isInPrivateSpace) "Remove from Private Space" else "Add to Private Space",
-                                icon = Icons.Default.Lock,
-                                onClick = {
-                                viewModel.toggleAppInPrivateSpace(app)
-                                dismissMenu()
-                                }
-                            )
-                        }
-                    }
-                }
+                ScrollableAppDrawerContextMenu(
+                    actions = menuActions,
+                    listState = contextMenuListState,
+                    scrollbarOnLeft = settings.scrollbarOnLeft,
+                )
             },
             confirmButton = { TextButton(dismissMenu) { Text("Close") } }
         )
@@ -865,6 +919,48 @@ fun AppDrawerScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun ScrollableAppDrawerContextMenu(
+    actions: List<AppDrawerMenuAction>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    scrollbarOnLeft: Boolean,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 360.dp)
+    ) {
+        val showScrollbar = actions.size > 6
+        val scrollbarPadding = if (showScrollbar) {
+            if (scrollbarOnLeft) Modifier.padding(start = 12.dp) else Modifier.padding(end = 12.dp)
+        } else {
+            Modifier
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(scrollbarPadding),
+        ) {
+            items(actions, key = { it.text }) { action ->
+                ContextMenuItemRow(
+                    text = action.text,
+                    icon = action.icon,
+                    onClick = action.onClick,
+                )
+            }
+        }
+        if (showScrollbar) {
+            ScrollbarIndicator(
+                listState = listState,
+                totalItems = actions.size,
+                alignToStart = scrollbarOnLeft,
+                modifier = Modifier.align(if (scrollbarOnLeft) Alignment.TopStart else Alignment.TopEnd),
+            )
+        }
     }
 }
 

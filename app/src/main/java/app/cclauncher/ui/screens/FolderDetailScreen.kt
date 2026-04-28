@@ -3,6 +3,8 @@ package app.cclauncher.ui.screens
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -55,6 +59,7 @@ import app.cclauncher.MainViewModel
 import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
+import app.cclauncher.data.HomeOrientation
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ColorPickerDialog
 import kotlinx.coroutines.launch
@@ -68,9 +73,22 @@ fun FolderDetailScreen(
     onNavigateBack: () -> Unit,
 ) {
     val homeLayout by viewModel.homeLayoutState.collectAsState()
-    val folder = homeLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId }
+    val settingsSnapshot by viewModel.settingsSnapshot.collectAsState()
+    val folder = remember(homeLayout.items, folderId) { viewModel.getAllFolders().find { it.id == folderId } }
+    val portraitFolder = remember(settingsSnapshot, folderId) {
+        viewModel.getFolder(folderId, HomeOrientation.PORTRAIT) ?: folder?.copy(showOnHome = false)
+    }
+    val landscapeFolder = remember(settingsSnapshot, folderId) {
+        viewModel.getFolder(folderId, HomeOrientation.LANDSCAPE) ?: folder?.copy(showOnHome = false)
+    }
+    val portraitHasSpace = remember(settingsSnapshot, folderId) {
+        viewModel.hasFreeSpaceForFolder(folderId, HomeOrientation.PORTRAIT)
+    }
+    val landscapeHasSpace = remember(settingsSnapshot, folderId) {
+        viewModel.hasFreeSpaceForFolder(folderId, HomeOrientation.LANDSCAPE)
+    }
 
-    if (folder == null) {
+    if (folder == null || portraitFolder == null || landscapeFolder == null) {
         // Folder was deleted while viewing — go back
         onNavigateBack()
         return
@@ -85,8 +103,11 @@ fun FolderDetailScreen(
     var appTextSize by remember(folder.appTextSize) { mutableFloatStateOf(folder.appTextSize) }
     var showAppPicker by remember { mutableStateOf(false) }
     var appPickerSearch by remember { mutableStateOf("") }
-    var showColorPicker by remember { mutableStateOf(false) }
+    var colorPickerOrientation by remember { mutableStateOf<HomeOrientation?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var defaultFontOrientation by remember { mutableStateOf<HomeOrientation?>(null) }
+    var portraitExpanded by remember { mutableStateOf(true) }
+    var landscapeExpanded by remember { mutableStateOf(true) }
     val coroutineScope = rememberCoroutineScope()
 
     val pickDefaultFontLauncher = rememberLauncherForActivityResult(
@@ -96,11 +117,10 @@ fun FolderDetailScreen(
             coroutineScope.launch {
                 val newPath = viewModel.settingsRepository.importFontFile(uri, "folder_default_font")
                 if (newPath != null) {
-                    if (folder.defaultAppFontPath.isNotBlank()) {
-                        viewModel.settingsRepository.deleteFontFile(folder.defaultAppFontPath)
-                    }
-                    viewModel.updateFolderDefaultAppFont(folderId, newPath)
+                    val orientation = defaultFontOrientation ?: HomeOrientation.PORTRAIT
+                    viewModel.updateFolderDefaultAppFont(folderId, newPath, orientation)
                 }
+                defaultFontOrientation = null
             }
         }
     )
@@ -143,112 +163,61 @@ fun FolderDetailScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Show on Home Screen", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Hide the tile on the home grid without deleting the folder",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    Switch(
-                        checked = folder.showOnHome,
-                        onCheckedChange = { viewModel.setFolderShowOnHome(folderId, it) },
-                    )
-                }
+                Text(
+                    "Contents stay shared. The sections below control each layout's own folder appearance and home visibility.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
                 Spacer(Modifier.height(16.dp))
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Hide Folder Name", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Don't show the folder title in the overlay header",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    Switch(
-                        checked = folder.hideTitle,
-                        onCheckedChange = { viewModel.setFolderHideTitle(folderId, it) },
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
+                FolderOrientationSection(
+                    title = "Portrait Settings",
+                    folder = portraitFolder,
+                    expanded = portraitExpanded,
+                    hasSpace = portraitHasSpace,
+                    onExpandedChange = { portraitExpanded = it },
+                    onShowOnHomeChange = { viewModel.setFolderShowOnHome(folderId, it, HomeOrientation.PORTRAIT) },
+                    onHideTitleChange = { viewModel.setFolderHideTitle(folderId, it, HomeOrientation.PORTRAIT) },
+                    onHideCloseButtonChange = { viewModel.setFolderHideCloseButton(folderId, it, HomeOrientation.PORTRAIT) },
+                    onHideOutlineChange = { viewModel.setFolderHideOutline(folderId, it, HomeOrientation.PORTRAIT) },
+                    onTapOutsideToCloseChange = { viewModel.setFolderTapOutsideToClose(folderId, it, HomeOrientation.PORTRAIT) },
+                    onPickDefaultFont = {
+                        defaultFontOrientation = HomeOrientation.PORTRAIT
+                        pickDefaultFontLauncher.launch("font/*")
+                    },
+                    onResetDefaultFont = {
+                        viewModel.updateFolderDefaultAppFont(folderId, "", HomeOrientation.PORTRAIT)
+                    },
+                    onPickColor = { colorPickerOrientation = HomeOrientation.PORTRAIT },
+                    onResetColor = { viewModel.updateFolderTitleColor(folderId, 0, HomeOrientation.PORTRAIT) },
+                )
+                Spacer(Modifier.height(12.dp))
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Hide Close Button", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Don't show the × button (folder still closes on back/outside tap)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    Switch(
-                        checked = folder.hideCloseButton,
-                        onCheckedChange = { viewModel.setFolderHideCloseButton(folderId, it) },
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Hide Folder Outline", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Remove the rounded border around the folder overlay",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    Switch(
-                        checked = folder.hideOutline,
-                        onCheckedChange = { viewModel.setFolderHideOutline(folderId, it) },
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Tap Empty Space to Close", style = MaterialTheme.typography.labelLarge)
-                        Text(
-                            "Dismiss the folder by tapping the backdrop or any empty grid cell",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                        )
-                    }
-                    Switch(
-                        checked = folder.tapOutsideToClose,
-                        onCheckedChange = { viewModel.setFolderTapOutsideToClose(folderId, it) },
-                    )
-                }
+                FolderOrientationSection(
+                    title = "Landscape Settings",
+                    folder = landscapeFolder,
+                    expanded = landscapeExpanded,
+                    hasSpace = landscapeHasSpace,
+                    onExpandedChange = { landscapeExpanded = it },
+                    onShowOnHomeChange = { viewModel.setFolderShowOnHome(folderId, it, HomeOrientation.LANDSCAPE) },
+                    onHideTitleChange = { viewModel.setFolderHideTitle(folderId, it, HomeOrientation.LANDSCAPE) },
+                    onHideCloseButtonChange = { viewModel.setFolderHideCloseButton(folderId, it, HomeOrientation.LANDSCAPE) },
+                    onHideOutlineChange = { viewModel.setFolderHideOutline(folderId, it, HomeOrientation.LANDSCAPE) },
+                    onTapOutsideToCloseChange = { viewModel.setFolderTapOutsideToClose(folderId, it, HomeOrientation.LANDSCAPE) },
+                    onPickDefaultFont = {
+                        defaultFontOrientation = HomeOrientation.LANDSCAPE
+                        pickDefaultFontLauncher.launch("font/*")
+                    },
+                    onResetDefaultFont = {
+                        viewModel.updateFolderDefaultAppFont(folderId, "", HomeOrientation.LANDSCAPE)
+                    },
+                    onPickColor = { colorPickerOrientation = HomeOrientation.LANDSCAPE },
+                    onResetColor = { viewModel.updateFolderTitleColor(folderId, 0, HomeOrientation.LANDSCAPE) },
+                )
                 Spacer(Modifier.height(16.dp))
             }
 
@@ -304,57 +273,10 @@ fun FolderDetailScreen(
                 Text("Folder App Font (Default)", style = MaterialTheme.typography.labelLarge)
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = if (folder.defaultAppFontPath.isBlank()) {
-                        "Uses folder/home/global fallback"
-                    } else {
-                        File(folder.defaultAppFontPath).name
-                    },
+                    text = "Each orientation can choose its own default app font above.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { pickDefaultFontLauncher.launch("font/*") }) {
-                        Text("Select Font")
-                    }
-                    if (folder.defaultAppFontPath.isNotBlank()) {
-                        TextButton(
-                            onClick = {
-                                viewModel.settingsRepository.deleteFontFile(folder.defaultAppFontPath)
-                                viewModel.updateFolderDefaultAppFont(folderId, "")
-                            }
-                        ) {
-                            Text("Use Fallback")
-                        }
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            item {
-                Text("Folder Text Color", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (folder.titleTextColor != 0) Color(folder.titleTextColor)
-                                else MaterialTheme.colorScheme.onSurface
-                            )
-                    )
-                    TextButton(onClick = { showColorPicker = true }) {
-                        Text(if (folder.titleTextColor != 0) "Change color" else "Set custom color")
-                    }
-                    if (folder.titleTextColor != 0) {
-                        TextButton(onClick = { viewModel.updateFolderTitleColor(folderId, 0) }) {
-                            Text("Reset")
-                        }
-                    }
-                }
                 Spacer(Modifier.height(16.dp))
             }
 
@@ -411,14 +333,15 @@ fun FolderDetailScreen(
         }
     }
 
-    if (showColorPicker) {
+    colorPickerOrientation?.let { orientation ->
+        val targetFolder = if (orientation == HomeOrientation.PORTRAIT) portraitFolder else landscapeFolder
         ColorPickerDialog(
-            title = "Folder Text Color",
-            currentColor = folder.titleTextColor,
-            onDismiss = { showColorPicker = false },
+            title = if (orientation == HomeOrientation.PORTRAIT) "Portrait Folder Text Color" else "Landscape Folder Text Color",
+            currentColor = targetFolder.titleTextColor,
+            onDismiss = { colorPickerOrientation = null },
             onColorSelected = { color ->
-                viewModel.updateFolderTitleColor(folderId, color)
-                showColorPicker = false
+                viewModel.updateFolderTitleColor(folderId, color, orientation)
+                colorPickerOrientation = null
             }
         )
     }
@@ -484,6 +407,171 @@ fun FolderDetailScreen(
             }
         )
     }
+}
+
+@Composable
+private fun FolderOrientationSection(
+    title: String,
+    folder: HomeItem.Folder,
+    expanded: Boolean,
+    hasSpace: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onShowOnHomeChange: (Boolean) -> Unit,
+    onHideTitleChange: (Boolean) -> Unit,
+    onHideCloseButtonChange: (Boolean) -> Unit,
+    onHideOutlineChange: (Boolean) -> Unit,
+    onTapOutsideToCloseChange: (Boolean) -> Unit,
+    onPickDefaultFont: () -> Unit,
+    onResetDefaultFont: () -> Unit,
+    onPickColor: () -> Unit,
+    onResetColor: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .animateContentSize()
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onExpandedChange(!expanded) },
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (folder.showOnHome) "Visible on this home layout" else "Hidden from this home layout",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+            )
+        }
+
+        AnimatedVisibility(expanded) {
+            Column {
+                Spacer(Modifier.height(12.dp))
+                val canEnable = folder.showOnHome || hasSpace
+                FolderOrientationToggleRow(
+                    title = "Show on Home Screen",
+                    description = if (!folder.showOnHome && !hasSpace)
+                        "No available grid space"
+                    else
+                        "Hide the tile on this home grid without deleting the folder.",
+                    checked = folder.showOnHome,
+                    onCheckedChange = { if (it && !canEnable) Unit else onShowOnHomeChange(it) },
+                    enabled = canEnable,
+                )
+                FolderOrientationToggleRow(
+                    title = "Hide Folder Name",
+                    description = "Don't show the folder title in this layout's overlay header.",
+                    checked = folder.hideTitle,
+                    onCheckedChange = onHideTitleChange,
+                )
+                FolderOrientationToggleRow(
+                    title = "Hide Close Button",
+                    description = "Don't show the × button for this layout's overlay.",
+                    checked = folder.hideCloseButton,
+                    onCheckedChange = onHideCloseButtonChange,
+                )
+                FolderOrientationToggleRow(
+                    title = "Hide Folder Outline",
+                    description = "Remove the rounded border around this layout's folder overlay.",
+                    checked = folder.hideOutline,
+                    onCheckedChange = onHideOutlineChange,
+                )
+                FolderOrientationToggleRow(
+                    title = "Tap Empty Space to Close",
+                    description = "Dismiss the folder by tapping the backdrop or any empty grid cell.",
+                    checked = folder.tapOutsideToClose,
+                    onCheckedChange = onTapOutsideToCloseChange,
+                )
+                Text("Folder App Font (Default)", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = if (folder.defaultAppFontPath.isBlank()) {
+                        "Uses folder/home/global fallback"
+                    } else {
+                        File(folder.defaultAppFontPath).name
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = onPickDefaultFont) { Text("Select Font") }
+                    if (folder.defaultAppFontPath.isNotBlank()) {
+                        TextButton(onClick = onResetDefaultFont) { Text("Use Fallback") }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("Folder Text Color", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (folder.titleTextColor != 0) Color(folder.titleTextColor)
+                                else MaterialTheme.colorScheme.onSurface
+                            )
+                    )
+                    TextButton(onClick = onPickColor) {
+                        Text(if (folder.titleTextColor != 0) "Change color" else "Set custom color")
+                    }
+                    if (folder.titleTextColor != 0) {
+                        TextButton(onClick = onResetColor) { Text("Reset") }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderOrientationToggleRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            )
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        else MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
+    }
+    Spacer(Modifier.height(16.dp))
 }
 
 @Composable

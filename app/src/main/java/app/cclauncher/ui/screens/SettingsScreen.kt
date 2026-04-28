@@ -146,18 +146,50 @@ private const val MANUAL_ABOUT = "about"
 private const val MANUAL_EXPORT_SETTINGS = "export_settings"
 private const val MANUAL_IMPORT_SETTINGS = "import_settings"
 
+private val landscapeSpecificFields = setOf(
+    "landscapeHomeScreenRows",
+    "landscapeHomeScreenColumns",
+    "landscapeHomeScreenPages",
+    "showIconsInLandscape",
+    "landscapeSwipeDownAction",
+    "landscapeSwipeDownApp",
+    "landscapeSwipeUpAction",
+    "landscapeSwipeUpApp",
+    "landscapeSwipeLeftAction",
+    "landscapeSwipeLeftApp",
+    "landscapeSwipeRightAction",
+    "landscapeSwipeRightApp",
+)
+
+private fun isLandscapeSettingsAvailable(uiState: AppSettings): Boolean =
+    uiState.landscapeLayoutEnabled || uiState.screenOrientation == 2
+
 private val settingsTabs = listOf(
     SettingsTab(
         title = "Home",
         sections = listOf(
             SettingsSectionSpec(
-                title = "Grid & Pages",
+                title = "Layout Mode",
                 entries = listOf(
-                    field("homeScreenRows"),
-                    field("homeScreenColumns"),
-                    field("homeScreenPages"),
+                    field("landscapeLayoutEnabled"),
                     field("showPageIndicator"),
                     field("showMoveGridOverlay"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Portrait Grid & Pages",
+                entries = listOf(
+                    field("portraitHomeScreenRows"),
+                    field("portraitHomeScreenColumns"),
+                    field("portraitHomeScreenPages"),
+                ),
+            ),
+            SettingsSectionSpec(
+                title = "Landscape Grid & Pages",
+                entries = listOf(
+                    field("landscapeHomeScreenRows"),
+                    field("landscapeHomeScreenColumns"),
+                    field("landscapeHomeScreenPages"),
                 ),
             ),
             SettingsSectionSpec(
@@ -292,31 +324,29 @@ private val settingsTabs = listOf(
                 ),
             ),
             SettingsSectionSpec(
-                title = "Swipe Down",
+                title = "Portrait Swipe Gestures",
                 entries = listOf(
-                    field("swipeDownAction"),
-                    field("swipeDownApp"),
+                    field("portraitSwipeDownAction"),
+                    field("portraitSwipeDownApp"),
+                    field("portraitSwipeUpAction"),
+                    field("portraitSwipeUpApp"),
+                    field("portraitSwipeLeftAction"),
+                    field("portraitSwipeLeftApp"),
+                    field("portraitSwipeRightAction"),
+                    field("portraitSwipeRightApp"),
                 ),
             ),
             SettingsSectionSpec(
-                title = "Swipe Up",
+                title = "Landscape Swipe Gestures",
                 entries = listOf(
-                    field("swipeUpAction"),
-                    field("swipeUpApp"),
-                ),
-            ),
-            SettingsSectionSpec(
-                title = "Swipe Left",
-                entries = listOf(
-                    field("swipeLeftAction"),
-                    field("swipeLeftApp"),
-                ),
-            ),
-            SettingsSectionSpec(
-                title = "Swipe Right",
-                entries = listOf(
-                    field("swipeRightAction"),
-                    field("swipeRightApp"),
+                    field("landscapeSwipeDownAction"),
+                    field("landscapeSwipeDownApp"),
+                    field("landscapeSwipeUpAction"),
+                    field("landscapeSwipeUpApp"),
+                    field("landscapeSwipeLeftAction"),
+                    field("landscapeSwipeLeftApp"),
+                    field("landscapeSwipeRightAction"),
+                    field("landscapeSwipeRightApp"),
                 ),
             ),
             SettingsSectionSpec(
@@ -427,9 +457,7 @@ fun SettingsScreen(
     var pendingPageChange by remember { mutableStateOf<Int?>(null) }
 
     val homeLayoutState by mainViewModel.homeLayoutState.collectAsState()
-    val allFolders = remember(homeLayoutState.items) {
-        homeLayoutState.items.filterIsInstance<HomeItem.Folder>()
-    }
+    val allFolders = remember(homeLayoutState.items) { mainViewModel.getAllFolders() }
     // "swipeDirection" -> show folder-picker dialog for that direction; null = closed
     var swipeFolderPickerFor by remember { mutableStateOf<String?>(null) }
     var swipeFolderSearch by remember { mutableStateOf("") }
@@ -799,7 +827,12 @@ fun SettingsScreen(
                             val intValue = newValue.toInt()
 
                             when {
-                                (propertyName == "homeScreenRows" || propertyName == "homeScreenColumns") -> {
+                                (
+                                    propertyName == "portraitHomeScreenRows" ||
+                                        propertyName == "portraitHomeScreenColumns" ||
+                                        propertyName == "landscapeHomeScreenRows" ||
+                                        propertyName == "landscapeHomeScreenColumns"
+                                    ) -> {
                                     if (viewModel.willGridChangeAffectItems(propertyName, intValue)) {
                                         pendingGridChange = propertyName to intValue
                                         showGridWarningDialog = true
@@ -809,7 +842,7 @@ fun SettingsScreen(
                                     viewModel.updateGridSize(propertyName, intValue)
                                 }
 
-                                propertyName == "homeScreenPages" -> {
+                                propertyName == "portraitHomeScreenPages" || propertyName == "landscapeHomeScreenPages" -> {
                                     if (mainViewModel.willPageChangeAffectItems(intValue)) {
                                         pendingPageChange = intValue
                                         showPageWarningDialog = true
@@ -1301,7 +1334,8 @@ private fun SettingsFieldRenderer(
     onShowAccessibilityDisclosure: () -> Unit = {},
 ) {
     val meta = field.meta ?: return
-    val isEnabled = schema.isEnabled(uiState, field)
+    val isEnabled = schema.isEnabled(uiState, field) &&
+        (!landscapeSpecificFields.contains(field.name) || isLandscapeSettingsAvailable(uiState))
 
     val visuallyGroupedUnderParent = setOf(
         "invertSearchResultsOrder",
@@ -1398,10 +1432,14 @@ private fun SettingsFieldRenderer(
                 enabled = isEnabled,
                 onClick = {
                     val selectionType = when (field.name) {
-                        "swipeLeftApp" -> AppSelectionType.SWIPE_LEFT_APP
-                        "swipeRightApp" -> AppSelectionType.SWIPE_RIGHT_APP
-                        "swipeUpApp" -> AppSelectionType.SWIPE_UP_APP
-                        "swipeDownApp" -> AppSelectionType.SWIPE_DOWN_APP
+                        "portraitSwipeLeftApp" -> AppSelectionType.PORTRAIT_SWIPE_LEFT_APP
+                        "portraitSwipeRightApp" -> AppSelectionType.PORTRAIT_SWIPE_RIGHT_APP
+                        "portraitSwipeUpApp" -> AppSelectionType.PORTRAIT_SWIPE_UP_APP
+                        "portraitSwipeDownApp" -> AppSelectionType.PORTRAIT_SWIPE_DOWN_APP
+                        "landscapeSwipeLeftApp" -> AppSelectionType.LANDSCAPE_SWIPE_LEFT_APP
+                        "landscapeSwipeRightApp" -> AppSelectionType.LANDSCAPE_SWIPE_RIGHT_APP
+                        "landscapeSwipeUpApp" -> AppSelectionType.LANDSCAPE_SWIPE_UP_APP
+                        "landscapeSwipeDownApp" -> AppSelectionType.LANDSCAPE_SWIPE_DOWN_APP
                         else -> null
                     }
 
@@ -1506,26 +1544,48 @@ private fun SwipeFolderSettingRenderer(
     onOpenFolderPicker: (String) -> Unit,
 ) {
     val titleAndSubtitle = when (fieldName) {
-        "swipeDownAction" -> {
-            if (uiState.swipeDownAction != Constants.SwipeAction.OPEN_FOLDER) return
-            "Swipe Down Folder" to (allFolders.find { it.id == uiState.swipeDownFolderId }?.title ?: "Not set")
+        "portraitSwipeDownAction" -> {
+            if (uiState.portraitSwipeDownAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Portrait Swipe Down Folder" to (allFolders.find { it.id == uiState.portraitSwipeDownFolderId }?.title ?: "Not set")
         }
-        "swipeUpAction" -> {
-            if (uiState.swipeUpAction != Constants.SwipeAction.OPEN_FOLDER) return
-            "Swipe Up Folder" to (allFolders.find { it.id == uiState.swipeUpFolderId }?.title ?: "Not set")
+        "portraitSwipeUpAction" -> {
+            if (uiState.portraitSwipeUpAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Portrait Swipe Up Folder" to (allFolders.find { it.id == uiState.portraitSwipeUpFolderId }?.title ?: "Not set")
         }
-        "swipeLeftAction" -> {
-            if (uiState.swipeLeftAction != Constants.SwipeAction.OPEN_FOLDER) return
-            "Swipe Left Folder" to (allFolders.find { it.id == uiState.swipeLeftFolderId }?.title ?: "Not set")
+        "portraitSwipeLeftAction" -> {
+            if (uiState.portraitSwipeLeftAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Portrait Swipe Left Folder" to (allFolders.find { it.id == uiState.portraitSwipeLeftFolderId }?.title ?: "Not set")
         }
-        "swipeRightAction" -> {
-            if (uiState.swipeRightAction != Constants.SwipeAction.OPEN_FOLDER) return
-            "Swipe Right Folder" to (allFolders.find { it.id == uiState.swipeRightFolderId }?.title ?: "Not set")
+        "portraitSwipeRightAction" -> {
+            if (uiState.portraitSwipeRightAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Portrait Swipe Right Folder" to (allFolders.find { it.id == uiState.portraitSwipeRightFolderId }?.title ?: "Not set")
+        }
+        "landscapeSwipeDownAction" -> {
+            if (uiState.landscapeSwipeDownAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Landscape Swipe Down Folder" to (allFolders.find { it.id == uiState.landscapeSwipeDownFolderId }?.title ?: "Not set")
+        }
+        "landscapeSwipeUpAction" -> {
+            if (uiState.landscapeSwipeUpAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Landscape Swipe Up Folder" to (allFolders.find { it.id == uiState.landscapeSwipeUpFolderId }?.title ?: "Not set")
+        }
+        "landscapeSwipeLeftAction" -> {
+            if (uiState.landscapeSwipeLeftAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Landscape Swipe Left Folder" to (allFolders.find { it.id == uiState.landscapeSwipeLeftFolderId }?.title ?: "Not set")
+        }
+        "landscapeSwipeRightAction" -> {
+            if (uiState.landscapeSwipeRightAction != Constants.SwipeAction.OPEN_FOLDER) return
+            "Landscape Swipe Right Folder" to (allFolders.find { it.id == uiState.landscapeSwipeRightFolderId }?.title ?: "Not set")
         }
         else -> return
     }
 
-    val direction = fieldName.removePrefix("swipe").removeSuffix("Action").lowercase()
+    val direction = when (fieldName) {
+        "portraitSwipeDownAction", "landscapeSwipeDownAction" -> "down"
+        "portraitSwipeUpAction", "landscapeSwipeUpAction" -> "up"
+        "portraitSwipeLeftAction", "landscapeSwipeLeftAction" -> "left"
+        "portraitSwipeRightAction", "landscapeSwipeRightAction" -> "right"
+        else -> return
+    }
     SettingsItem(
         title = titleAndSubtitle.first,
         subtitle = titleAndSubtitle.second,

@@ -8,6 +8,8 @@ import android.os.Build
 import android.util.Log
 import app.cclauncher.data.HomeLayout
 import app.cclauncher.data.HomeItem
+import app.cclauncher.data.HomeOrientation
+import app.cclauncher.data.OrientationHomeLayouts
 import app.cclauncher.helper.AppTagStorage
 import app.cclauncher.helper.AppTagUtils
 import io.github.mlmgames.settings.core.SettingsRepository
@@ -19,7 +21,9 @@ import io.github.mlmgames.settings.core.backup.SettingsBackupManager
 import io.github.mlmgames.settings.core.backup.ValidationResult
 import io.github.mlmgames.settings.core.datastore.createSettingsDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import org.koin.core.component.KoinComponent
 import java.io.File
 import java.io.FileOutputStream
@@ -31,6 +35,7 @@ enum class WidgetImportMode {
 }
 
 class AppSettingsRepository(private val context: Context): KoinComponent {
+    private var activeHomeOrientation: HomeOrientation = HomeOrientation.PORTRAIT
 
     private val dataStore = createSettingsDataStore(context, name = "app.cclauncher.settings")
     private val repo = SettingsRepository(dataStore, AppSettingsSchema)
@@ -60,11 +65,112 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
 
     val settings: Flow<AppSettings> = repo.flow
 
+    fun setActiveHomeOrientation(orientation: HomeOrientation) {
+        activeHomeOrientation = orientation
+    }
+
+    fun getActiveHomeOrientation(): HomeOrientation = activeHomeOrientation
+
     private fun readAppTags(settings: AppSettings): Map<String, List<String>> =
         AppTagStorage.decode(settings.appTagsJson)
 
     private fun writeAppTags(tagsByApp: Map<String, List<String>>): String =
         AppTagStorage.encode(tagsByApp)
+
+    private fun migrateOrientationAwareSettings(settings: AppSettings): AppSettings {
+        val portraitLayout = settings.homeLayout.copy(
+            rows = settings.homeScreenRows,
+            columns = settings.homeScreenColumns,
+            pageCount = settings.homeScreenPages
+        )
+        val landscapeLayout = HomeLayout(
+            items = emptyList(),
+            rows = settings.landscapeHomeScreenRows,
+            columns = settings.landscapeHomeScreenColumns,
+            pageCount = settings.landscapeHomeScreenPages
+        )
+
+        return settings.copy(
+            landscapeLayoutEnabled = settings.landscapeLayoutEnabled,
+            portraitHomeScreenRows = settings.homeScreenRows,
+            portraitHomeScreenColumns = settings.homeScreenColumns,
+            portraitHomeScreenPages = settings.homeScreenPages,
+            portraitSwipeDownAction = settings.swipeDownAction,
+            portraitSwipeDownApp = settings.swipeDownApp,
+            portraitSwipeDownFolderId = settings.swipeDownFolderId,
+            portraitSwipeUpAction = settings.swipeUpAction,
+            portraitSwipeUpApp = settings.swipeUpApp,
+            portraitSwipeUpFolderId = settings.swipeUpFolderId,
+            portraitSwipeLeftAction = settings.swipeLeftAction,
+            portraitSwipeLeftApp = settings.swipeLeftApp,
+            portraitSwipeLeftFolderId = settings.swipeLeftFolderId,
+            portraitSwipeRightAction = settings.swipeRightAction,
+            portraitSwipeRightApp = settings.swipeRightApp,
+            portraitSwipeRightFolderId = settings.swipeRightFolderId,
+            landscapeSwipeDownAction = settings.swipeDownAction,
+            landscapeSwipeDownApp = settings.swipeDownApp,
+            landscapeSwipeDownFolderId = settings.swipeDownFolderId,
+            landscapeSwipeUpAction = settings.swipeUpAction,
+            landscapeSwipeUpApp = settings.swipeUpApp,
+            landscapeSwipeUpFolderId = settings.swipeUpFolderId,
+            landscapeSwipeLeftAction = settings.swipeLeftAction,
+            landscapeSwipeLeftApp = settings.swipeLeftApp,
+            landscapeSwipeLeftFolderId = settings.swipeLeftFolderId,
+            landscapeSwipeRightAction = settings.swipeRightAction,
+            landscapeSwipeRightApp = settings.swipeRightApp,
+            landscapeSwipeRightFolderId = settings.swipeRightFolderId,
+            portraitCornerZoneTopLeft = settings.cornerZoneTopLeft,
+            portraitCornerZoneTopRight = settings.cornerZoneTopRight,
+            portraitCornerZoneBottomLeft = settings.cornerZoneBottomLeft,
+            portraitCornerZoneBottomRight = settings.cornerZoneBottomRight,
+            portraitApplyToAllCornerZones = settings.applyToAllCornerZones,
+            portraitCornerZoneUniversal = settings.cornerZoneUniversal,
+            portraitCornerZonesInFolders = settings.cornerZonesInFolders,
+            portraitCornerZoneDangerFade = settings.cornerZoneDangerFade,
+            landscapeCornerZoneTopLeft = settings.cornerZoneTopLeft,
+            landscapeCornerZoneTopRight = settings.cornerZoneTopRight,
+            landscapeCornerZoneBottomLeft = settings.cornerZoneBottomLeft,
+            landscapeCornerZoneBottomRight = settings.cornerZoneBottomRight,
+            landscapeApplyToAllCornerZones = settings.applyToAllCornerZones,
+            landscapeCornerZoneUniversal = settings.cornerZoneUniversal,
+            landscapeCornerZonesInFolders = settings.cornerZonesInFolders,
+            landscapeCornerZoneDangerFade = settings.cornerZoneDangerFade,
+            homeLayout = portraitLayout,
+            homeLayouts = OrientationHomeLayouts(
+                portrait = portraitLayout,
+                landscape = landscapeLayout
+            ),
+            orientationAwareHomeMigrated = true,
+            landscapeHomeDefaultFixApplied = true
+        )
+    }
+
+    private fun repairLandscapeDefaultRegression(settings: AppSettings): AppSettings {
+        if (settings.landscapeHomeDefaultFixApplied) return settings
+
+        val portrait = settings.homeLayouts.portrait
+        val landscape = settings.homeLayouts.landscape
+        val shouldClearMirroredLandscape =
+            !settings.landscapeLayoutEnabled &&
+                landscape.items.isNotEmpty() &&
+                landscape.items == portrait.items
+
+        return if (shouldClearMirroredLandscape) {
+            settings.copy(
+                homeLayouts = settings.homeLayouts.copy(
+                    landscape = HomeLayout(
+                        items = emptyList(),
+                        rows = settings.landscapeHomeScreenRows,
+                        columns = settings.landscapeHomeScreenColumns,
+                        pageCount = settings.landscapeHomeScreenPages
+                    )
+                ),
+                landscapeHomeDefaultFixApplied = true
+            )
+        } else {
+            settings.copy(landscapeHomeDefaultFixApplied = true)
+        }
+    }
 
     suspend fun updateSetting(propertyName: String, value: Any) {
         repo.set(propertyName, value)
@@ -74,55 +180,181 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
         repo.update(update)
     }
 
-    fun getHomeLayout(): Flow<HomeLayout> =
-        repo.observeField("homeLayout")
+    suspend fun ensureOrientationAwareMigration() {
+        repo.update { current ->
+            val migrated = if (current.orientationAwareHomeMigrated) current else migrateOrientationAwareSettings(current)
+            repairLandscapeDefaultRegression(migrated)
+        }
+    }
+
+    fun getHomeLayouts(): Flow<OrientationHomeLayouts> =
+        settings.map { it.homeLayouts }.distinctUntilChanged()
+
+    fun getHomeLayout(): Flow<HomeLayout> = getHomeLayout(activeHomeOrientation)
+
+    fun getHomeLayout(orientation: HomeOrientation): Flow<HomeLayout> =
+        settings
+            .map { appSettings ->
+                appSettings.homeLayouts.layoutFor(orientation).copy(
+                    rows = appSettings.homeRowsFor(orientation),
+                    columns = appSettings.homeColumnsFor(orientation),
+                    pageCount = appSettings.homePagesFor(orientation)
+                )
+            }
+            .distinctUntilChanged()
+
+    suspend fun saveHomeLayout(orientation: HomeOrientation, layout: HomeLayout) {
+        repo.update { settings ->
+            val normalized = layout.copy(
+                rows = settings.homeRowsFor(orientation),
+                columns = settings.homeColumnsFor(orientation),
+                pageCount = settings.homePagesFor(orientation)
+            )
+            val updatedLayouts = settings.homeLayouts.withLayout(orientation, normalized)
+            settings.copy(
+                homeLayout = updatedLayouts.portrait,
+                homeLayouts = updatedLayouts
+            )
+        }
+    }
 
     suspend fun saveHomeLayout(layout: HomeLayout) {
-        repo.set("homeLayout", layout)
+        saveHomeLayout(activeHomeOrientation, layout)
+    }
+
+    suspend fun updateHomeLayouts(
+        transform: (AppSettings, OrientationHomeLayouts) -> OrientationHomeLayouts
+    ) {
+        repo.update { settings ->
+            val updatedLayouts = transform(settings, settings.homeLayouts)
+            settings.copy(
+                homeLayout = updatedLayouts.portrait,
+                homeLayouts = updatedLayouts
+            )
+        }
+    }
+
+    suspend fun triggerHomeLayoutRefresh(orientation: HomeOrientation) {
+        val currentLayout = getHomeLayout(orientation).first()
+        saveHomeLayout(orientation, currentLayout)
     }
 
     suspend fun triggerHomeLayoutRefresh() {
-        val currentLayout = getHomeLayout().first()
-        saveHomeLayout(currentLayout)
+        triggerHomeLayoutRefresh(activeHomeOrientation)
     }
 
-    suspend fun setSwipeLeftApp(app: AppPreference) { repo.update { it.copy(swipeLeftApp = app) } }
+    suspend fun updateHomePageSetting(orientation: HomeOrientation, pageCount: Int) {
+        when (orientation) {
+            HomeOrientation.PORTRAIT -> repo.set("portraitHomeScreenPages", pageCount)
+            HomeOrientation.LANDSCAPE -> repo.set("landscapeHomeScreenPages", pageCount)
+        }
+    }
 
-    suspend fun setSwipeRightApp(app: AppPreference) { repo.update { it.copy(swipeRightApp = app) } }
-
-    suspend fun setSwipeUpApp(app: AppPreference) { repo.update { it.copy(swipeUpApp = app) } }
-
-    suspend fun setSwipeDownApp(app: AppPreference) { repo.update { it.copy(swipeDownApp = app) } }
-
-    suspend fun setSwipeFolderId(direction: String, folderId: String) {
+    suspend fun setSwipeLeftApp(orientation: HomeOrientation, app: AppPreference) {
         repo.update { s ->
-            when (direction) {
-                "up" -> s.copy(swipeUpFolderId = folderId)
-                "down" -> s.copy(swipeDownFolderId = folderId)
-                "left" -> s.copy(swipeLeftFolderId = folderId)
-                "right" -> s.copy(swipeRightFolderId = folderId)
-                else -> s
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> s.copy(portraitSwipeLeftApp = app)
+                HomeOrientation.LANDSCAPE -> s.copy(landscapeSwipeLeftApp = app)
             }
         }
     }
 
-    suspend fun updateCornerZoneConfig(corner: Int, config: CornerZoneConfig) {
+    suspend fun setSwipeLeftApp(app: AppPreference) = setSwipeLeftApp(activeHomeOrientation, app)
+
+    suspend fun setSwipeRightApp(orientation: HomeOrientation, app: AppPreference) {
         repo.update { s ->
-            when (corner) {
-                app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(cornerZoneTopLeft = config)
-                app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(cornerZoneTopRight = config)
-                app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(cornerZoneBottomLeft = config)
-                app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(cornerZoneBottomRight = config)
-                else -> s
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> s.copy(portraitSwipeRightApp = app)
+                HomeOrientation.LANDSCAPE -> s.copy(landscapeSwipeRightApp = app)
             }
         }
     }
 
-    suspend fun updateUniversalCornerZoneConfig(config: CornerZoneConfig) {
-        repo.update { it.copy(cornerZoneUniversal = config) }
+    suspend fun setSwipeRightApp(app: AppPreference) = setSwipeRightApp(activeHomeOrientation, app)
+
+    suspend fun setSwipeUpApp(orientation: HomeOrientation, app: AppPreference) {
+        repo.update { s ->
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> s.copy(portraitSwipeUpApp = app)
+                HomeOrientation.LANDSCAPE -> s.copy(landscapeSwipeUpApp = app)
+            }
+        }
     }
 
-    suspend fun updateAllCornerZoneAppearance(sourceConfig: CornerZoneConfig) {
+    suspend fun setSwipeUpApp(app: AppPreference) = setSwipeUpApp(activeHomeOrientation, app)
+
+    suspend fun setSwipeDownApp(orientation: HomeOrientation, app: AppPreference) {
+        repo.update { s ->
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> s.copy(portraitSwipeDownApp = app)
+                HomeOrientation.LANDSCAPE -> s.copy(landscapeSwipeDownApp = app)
+            }
+        }
+    }
+
+    suspend fun setSwipeDownApp(app: AppPreference) = setSwipeDownApp(activeHomeOrientation, app)
+
+    suspend fun setSwipeFolderId(orientation: HomeOrientation, direction: String, folderId: String) {
+        repo.update { s ->
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> when (direction) {
+                    "up" -> s.copy(portraitSwipeUpFolderId = folderId)
+                    "down" -> s.copy(portraitSwipeDownFolderId = folderId)
+                    "left" -> s.copy(portraitSwipeLeftFolderId = folderId)
+                    "right" -> s.copy(portraitSwipeRightFolderId = folderId)
+                    else -> s
+                }
+                HomeOrientation.LANDSCAPE -> when (direction) {
+                    "up" -> s.copy(landscapeSwipeUpFolderId = folderId)
+                    "down" -> s.copy(landscapeSwipeDownFolderId = folderId)
+                    "left" -> s.copy(landscapeSwipeLeftFolderId = folderId)
+                    "right" -> s.copy(landscapeSwipeRightFolderId = folderId)
+                    else -> s
+                }
+            }
+        }
+    }
+
+    suspend fun setSwipeFolderId(direction: String, folderId: String) =
+        setSwipeFolderId(activeHomeOrientation, direction, folderId)
+
+    suspend fun updateCornerZoneConfig(orientation: HomeOrientation, corner: Int, config: CornerZoneConfig) {
+        repo.update { s ->
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> when (corner) {
+                    app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(portraitCornerZoneTopLeft = config)
+                    app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(portraitCornerZoneTopRight = config)
+                    app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(portraitCornerZoneBottomLeft = config)
+                    app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(portraitCornerZoneBottomRight = config)
+                    else -> s
+                }
+                HomeOrientation.LANDSCAPE -> when (corner) {
+                    app.cclauncher.data.Constants.CornerPosition.TOP_LEFT -> s.copy(landscapeCornerZoneTopLeft = config)
+                    app.cclauncher.data.Constants.CornerPosition.TOP_RIGHT -> s.copy(landscapeCornerZoneTopRight = config)
+                    app.cclauncher.data.Constants.CornerPosition.BOTTOM_LEFT -> s.copy(landscapeCornerZoneBottomLeft = config)
+                    app.cclauncher.data.Constants.CornerPosition.BOTTOM_RIGHT -> s.copy(landscapeCornerZoneBottomRight = config)
+                    else -> s
+                }
+            }
+        }
+    }
+
+    suspend fun updateCornerZoneConfig(corner: Int, config: CornerZoneConfig) =
+        updateCornerZoneConfig(activeHomeOrientation, corner, config)
+
+    suspend fun updateUniversalCornerZoneConfig(orientation: HomeOrientation, config: CornerZoneConfig) {
+        repo.update {
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> it.copy(portraitCornerZoneUniversal = config)
+                HomeOrientation.LANDSCAPE -> it.copy(landscapeCornerZoneUniversal = config)
+            }
+        }
+    }
+
+    suspend fun updateUniversalCornerZoneConfig(config: CornerZoneConfig) =
+        updateUniversalCornerZoneConfig(activeHomeOrientation, config)
+
+    suspend fun updateAllCornerZoneAppearance(orientation: HomeOrientation, sourceConfig: CornerZoneConfig) {
         repo.update { s ->
             val applyAppearance = { target: CornerZoneConfig ->
                 if (target.enabled) target.copy(
@@ -135,17 +367,30 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
                     borderWidth = sourceConfig.borderWidth,
                 ) else target
             }
-            s.copy(
-                cornerZoneTopLeft = applyAppearance(s.cornerZoneTopLeft),
-                cornerZoneTopRight = applyAppearance(s.cornerZoneTopRight),
-                cornerZoneBottomLeft = applyAppearance(s.cornerZoneBottomLeft),
-                cornerZoneBottomRight = applyAppearance(s.cornerZoneBottomRight),
-            )
+            when (orientation) {
+                HomeOrientation.PORTRAIT -> s.copy(
+                    portraitCornerZoneTopLeft = applyAppearance(s.portraitCornerZoneTopLeft),
+                    portraitCornerZoneTopRight = applyAppearance(s.portraitCornerZoneTopRight),
+                    portraitCornerZoneBottomLeft = applyAppearance(s.portraitCornerZoneBottomLeft),
+                    portraitCornerZoneBottomRight = applyAppearance(s.portraitCornerZoneBottomRight),
+                )
+                HomeOrientation.LANDSCAPE -> s.copy(
+                    landscapeCornerZoneTopLeft = applyAppearance(s.landscapeCornerZoneTopLeft),
+                    landscapeCornerZoneTopRight = applyAppearance(s.landscapeCornerZoneTopRight),
+                    landscapeCornerZoneBottomLeft = applyAppearance(s.landscapeCornerZoneBottomLeft),
+                    landscapeCornerZoneBottomRight = applyAppearance(s.landscapeCornerZoneBottomRight),
+                )
+            }
         }
     }
 
-    suspend fun getSwipeLeftApp(): AppPreference = settings.first().swipeLeftApp
-    suspend fun getSwipeRightApp(): AppPreference = settings.first().swipeRightApp
+    suspend fun updateAllCornerZoneAppearance(sourceConfig: CornerZoneConfig) =
+        updateAllCornerZoneAppearance(activeHomeOrientation, sourceConfig)
+
+    suspend fun getSwipeLeftApp(orientation: HomeOrientation): AppPreference = settings.first().swipeAppFor(orientation, "left")
+    suspend fun getSwipeRightApp(orientation: HomeOrientation): AppPreference = settings.first().swipeAppFor(orientation, "right")
+    suspend fun getSwipeLeftApp(): AppPreference = getSwipeLeftApp(activeHomeOrientation)
+    suspend fun getSwipeRightApp(): AppPreference = getSwipeRightApp(activeHomeOrientation)
 
     suspend fun setSettingsLock(locked: Boolean) = repo.set("lockSettings", locked)
     suspend fun setSettingsLockPin(pin: String) = repo.set("settingsLockPin", pin)
@@ -514,39 +759,43 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
     }
 
     private suspend fun convertImportedWidgetsToPlaceholders() {
-        val currentLayout = getHomeLayout().first()
         val currentDensity = context.resources.displayMetrics.densityDpi
         val widgetManager = android.appwidget.AppWidgetManager.getInstance(context)
         val pm = context.packageManager
 
-        val updatedItems = currentLayout.items.map { item ->
-            if (item is HomeItem.Widget && !item.isPlaceholder) {
-                val providerInfo = widgetManager.installedProviders.find { info ->
-                    info.provider.packageName == item.packageName &&
-                        info.provider.className == item.providerClassName
+        updateHomeLayouts { _, layouts ->
+            fun convertLayout(layout: HomeLayout): HomeLayout {
+                val updatedItems = layout.items.map { item ->
+                    if (item is HomeItem.Widget && !item.isPlaceholder) {
+                        val providerInfo = widgetManager.installedProviders.find { info ->
+                            info.provider.packageName == item.packageName &&
+                                info.provider.className == item.providerClassName
+                        }
+
+                        item.copy(
+                            appWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID,
+                            isPlaceholder = true,
+                            appName = resolveAppName(pm, item.packageName),
+                            widgetName = providerInfo?.loadLabel(pm).orEmpty(),
+                            intendedColumnSpan = providerInfo?.let {
+                                estimateWidgetColumnSpan(it, layout.columns)
+                            } ?: item.columnSpan,
+                            intendedRowSpan = providerInfo?.let {
+                                estimateWidgetRowSpan(it, layout.rows)
+                            } ?: item.rowSpan,
+                            sourceDensityDpi = currentDensity,
+                        )
+                    } else {
+                        item
+                    }
                 }
-
-                item.copy(
-                    appWidgetId = android.appwidget.AppWidgetManager.INVALID_APPWIDGET_ID,
-                    isPlaceholder = true,
-                    appName = resolveAppName(pm, item.packageName),
-                    widgetName = providerInfo?.loadLabel(pm).orEmpty(),
-                    intendedColumnSpan = providerInfo?.let {
-                        estimateWidgetColumnSpan(it, currentLayout.columns)
-                    } ?: item.columnSpan,
-                    intendedRowSpan = providerInfo?.let {
-                        estimateWidgetRowSpan(it, currentLayout.rows)
-                    } ?: item.rowSpan,
-                    sourceDensityDpi = currentDensity,
-                )
-            } else {
-                item
+                return layout.copy(items = updatedItems)
             }
-        }
 
-        if (updatedItems != currentLayout.items) {
-            saveHomeLayout(currentLayout.copy(items = updatedItems))
-            triggerHomeLayoutRefresh()
+            layouts.copy(
+                portrait = convertLayout(layouts.portrait),
+                landscape = convertLayout(layouts.landscape)
+            )
         }
     }
 

@@ -234,10 +234,14 @@ fun CLauncherNavigation(
                     settingsViewModel = settingsViewModel,
                     selectionMode = currentSelectionType != null,
                     selectionTitle = when (currentSelectionType) {
-                        AppSelectionType.SWIPE_UP_APP -> "Select Swipe Up Action App"
-                        AppSelectionType.SWIPE_DOWN_APP -> "Select Swipe Down Action App"
-                        AppSelectionType.SWIPE_LEFT_APP -> "Select Swipe Left App"
-                        AppSelectionType.SWIPE_RIGHT_APP -> "Select Swipe Right App"
+                        AppSelectionType.PORTRAIT_SWIPE_UP_APP -> "Select Portrait Swipe Up App"
+                        AppSelectionType.PORTRAIT_SWIPE_DOWN_APP -> "Select Portrait Swipe Down App"
+                        AppSelectionType.PORTRAIT_SWIPE_LEFT_APP -> "Select Portrait Swipe Left App"
+                        AppSelectionType.PORTRAIT_SWIPE_RIGHT_APP -> "Select Portrait Swipe Right App"
+                        AppSelectionType.LANDSCAPE_SWIPE_UP_APP -> "Select Landscape Swipe Up App"
+                        AppSelectionType.LANDSCAPE_SWIPE_DOWN_APP -> "Select Landscape Swipe Down App"
+                        AppSelectionType.LANDSCAPE_SWIPE_LEFT_APP -> "Select Landscape Swipe Left App"
+                        AppSelectionType.LANDSCAPE_SWIPE_RIGHT_APP -> "Select Landscape Swipe Right App"
                         null -> ""
                     },
                     onNavigateToSettings = { navigateTo(LauncherDestination.Settings) },
@@ -245,10 +249,14 @@ fun CLauncherNavigation(
                     onAppClick = { app ->
                         if (currentSelectionType != null) {
                             when (currentSelectionType) {
-                                AppSelectionType.SWIPE_UP_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_SWIPE_UP_APP)
-                                AppSelectionType.SWIPE_DOWN_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_SWIPE_DOWN_APP)
-                                AppSelectionType.SWIPE_LEFT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_SWIPE_LEFT_APP)
-                                AppSelectionType.SWIPE_RIGHT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_SWIPE_RIGHT_APP)
+                                AppSelectionType.PORTRAIT_SWIPE_UP_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_PORTRAIT_SWIPE_UP_APP)
+                                AppSelectionType.PORTRAIT_SWIPE_DOWN_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_PORTRAIT_SWIPE_DOWN_APP)
+                                AppSelectionType.PORTRAIT_SWIPE_LEFT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_PORTRAIT_SWIPE_LEFT_APP)
+                                AppSelectionType.PORTRAIT_SWIPE_RIGHT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_PORTRAIT_SWIPE_RIGHT_APP)
+                                AppSelectionType.LANDSCAPE_SWIPE_UP_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_LANDSCAPE_SWIPE_UP_APP)
+                                AppSelectionType.LANDSCAPE_SWIPE_DOWN_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_LANDSCAPE_SWIPE_DOWN_APP)
+                                AppSelectionType.LANDSCAPE_SWIPE_LEFT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_LANDSCAPE_SWIPE_LEFT_APP)
+                                AppSelectionType.LANDSCAPE_SWIPE_RIGHT_APP -> viewModel.selectedApp(app, Constants.FLAG_SET_LANDSCAPE_SWIPE_RIGHT_APP)
                                 else -> {}
                             }
                             currentSelectionType = null

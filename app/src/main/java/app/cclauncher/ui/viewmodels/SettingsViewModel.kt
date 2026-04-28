@@ -7,6 +7,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppSettings
+import app.cclauncher.settings.homeColumnsFor
+import app.cclauncher.settings.homeRowsFor
 import app.cclauncher.settings.WidgetImportMode
 import app.cclauncher.ui.UiEvent
 import io.github.mlmgames.settings.core.backup.ImportResult
@@ -114,9 +116,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     suspend fun willGridChangeAffectItems(propertyName: String, newValue: Int): Boolean {
         val currentSettings = settingsState.value
         val currentLayout = settingsRepository.getHomeLayout().first()
+        val orientation = settingsRepository.getActiveHomeOrientation()
 
-        val newRows = if (propertyName == "homeScreenRows") newValue else currentSettings.homeScreenRows
-        val newColumns = if (propertyName == "homeScreenColumns") newValue else currentSettings.homeScreenColumns
+        val newRows = when (propertyName) {
+            "portraitHomeScreenRows" -> if (orientation.name == "PORTRAIT") newValue else currentSettings.homeRowsFor(orientation)
+            "landscapeHomeScreenRows" -> if (orientation.name == "LANDSCAPE") newValue else currentSettings.homeRowsFor(orientation)
+            else -> currentSettings.homeRowsFor(orientation)
+        }
+        val newColumns = when (propertyName) {
+            "portraitHomeScreenColumns" -> if (orientation.name == "PORTRAIT") newValue else currentSettings.homeColumnsFor(orientation)
+            "landscapeHomeScreenColumns" -> if (orientation.name == "LANDSCAPE") newValue else currentSettings.homeColumnsFor(orientation)
+            else -> currentSettings.homeColumnsFor(orientation)
+        }
 
         return currentLayout.items.any { item ->
             item.row + item.rowSpan > newRows || item.column + item.columnSpan > newColumns
