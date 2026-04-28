@@ -857,34 +857,47 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     fun addAppToFolder(folderId: String, appModel: AppModel) {
         viewModelScope.launch {
-            val currentLayout = _homeLayoutState.value
-            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId }
+            // Check the active orientation first; abort if it has no room.
+            val activeFolder = _homeLayoutState.value.items
+                .filterIsInstance<HomeItem.Folder>().find { it.id == folderId }
                 ?: getAllFolders().find { it.id == folderId }
                 ?: return@launch
-            val pos = findNextAvailablePositionInFolder(folder) ?: run {
+            if (findNextAvailablePositionInFolder(activeFolder) == null) {
                 snackbarManager.show("No space available in this folder.")
                 return@launch
             }
-            val settings = settingsRepository.settings.first()
-            val folderApp = appModel.toFolderApp(
-                row = pos.first,
-                column = pos.second,
-                iconPlacement = if (appModel.isSystemShortcut) {
-                    settings.shortcutIconPlacement
-                } else {
-                    Constants.IconPlacement.LEFT
-                },
-                labelFontPath = "",
-            )
-            updateFolderContentsAcrossOrientations(folderId) { it.copy(apps = it.apps + folderApp) }
-            snackbarManager.show("Added \"${appModel.appLabel}\" to \"${folder.title}\"")
+            val iconPlacement = if (appModel.isSystemShortcut)
+                _settingsSnapshot.value.shortcutIconPlacement
+            else Constants.IconPlacement.LEFT
+
+            // Add independently to each orientation so each layout gets its own position.
+            settingsRepository.updateHomeLayouts { _, layouts ->
+                fun addToLayout(layout: HomeLayout): HomeLayout {
+                    val folder = layout.items.filterIsInstance<HomeItem.Folder>()
+                        .find { it.id == folderId } ?: return layout
+                    val pos = findNextAvailablePositionInFolder(folder) ?: Pair(0, 0)
+                    val newApp = appModel.toFolderApp(
+                        row = pos.first, column = pos.second,
+                        iconPlacement = iconPlacement, labelFontPath = "",
+                    )
+                    val updatedFolder = folder.copy(apps = folder.apps + newApp)
+                    return layout.copy(items = layout.items.map { if (it.id == folderId) updatedFolder else it })
+                }
+                layouts.copy(
+                    portrait = addToLayout(layouts.portrait),
+                    landscape = addToLayout(layouts.landscape),
+                )
+            }
+            snackbarManager.show("Added \"${appModel.appLabel}\" to \"${activeFolder.title}\"")
         }
     }
 
     fun removeAppFromFolder(folderId: String, folderApp: FolderApp) {
         viewModelScope.launch {
+            // Remove by identity so the correct entry is removed from both orientation copies
+            // even when their position data has diverged.
             updateFolderContentsAcrossOrientations(folderId) { folder ->
-                folder.copy(apps = folder.apps.filter { it != folderApp })
+                folder.copy(apps = folder.apps.filterNot { isSameFolderAppEntry(it, folderApp) })
             }
         }
     }
@@ -906,7 +919,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     it
                 }
             }
-            updateFolderContentsAcrossOrientations(folderId) { it.copy(apps = updatedApps) }
+            val updatedFolder = folder.copy(apps = updatedApps)
+            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
         }
     }
 
@@ -1142,12 +1157,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     fun updateFolderAppIndividualTextSize(folderId: String, folderApp: FolderApp, textSize: Float) {
         viewModelScope.launch {
-            val currentLayout = _homeLayoutState.value
-            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>().find { it.id == folderId } ?: return@launch
-            val updatedApp = folderApp.copy(appTextSize = textSize)
-            val updatedFolder = folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
-            val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
-            settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
+            updateFolderAppInActiveOrientation(folderId, folderApp) { it.copy(appTextSize = textSize) }
         }
     }
 
@@ -1216,43 +1226,53 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
 
     fun updateFolderAppIndividualLabelAlignment(folderId: String, folderApp: FolderApp, alignment: Int) {
         viewModelScope.launch {
-            val updatedApp = folderApp.copy(appLabelAlignment = alignment)
-            updateFolderContentsAcrossOrientations(folderId) { folder ->
-                folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
-            }
+            updateFolderAppInActiveOrientation(folderId, folderApp) { it.copy(appLabelAlignment = alignment) }
         }
     }
 
     fun updateFolderAppIconPlacement(folderId: String, folderApp: FolderApp, placement: Int) {
         viewModelScope.launch {
-            val updatedApp = folderApp.copy(iconPlacement = placement)
-            updateFolderContentsAcrossOrientations(folderId) { folder ->
-                folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
-            }
+            updateFolderAppInActiveOrientation(folderId, folderApp) { it.copy(iconPlacement = placement) }
         }
     }
 
     fun updateFolderAppLabelFont(folderId: String, folderApp: FolderApp, labelFontPath: String) {
         viewModelScope.launch {
-            val updatedApp = folderApp.copy(labelFontPath = labelFontPath)
-            updateFolderContentsAcrossOrientations(folderId) { folder ->
-                folder.copy(apps = folder.apps.map { if (it == folderApp) updatedApp else it })
-            }
+            updateFolderAppInActiveOrientation(folderId, folderApp) { it.copy(labelFontPath = labelFontPath) }
         }
     }
 
     fun resizeFolderApp(folderId: String, folderApp: FolderApp, newRowSpan: Int, newColSpan: Int) {
         viewModelScope.launch {
-            val folder = getAllFolders().find { it.id == folderId } ?: return@launch
+            val currentLayout = _homeLayoutState.value
+            val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>()
+                .find { it.id == folderId } ?: return@launch
             if (!validateFolderPlacement(folder, folderApp, folderApp.row, folderApp.column, newRowSpan, newColSpan)) {
                 snackbarManager.show("Cannot resize app there.")
                 return@launch
             }
-            val updatedApp = folderApp.copy(rowSpan = newRowSpan, columnSpan = newColSpan)
-            updateFolderContentsAcrossOrientations(folderId) { current ->
-                current.copy(apps = current.apps.map { if (it == folderApp) updatedApp else it })
-            }
+            updateFolderAppInActiveOrientation(folderId, folderApp) { it.copy(rowSpan = newRowSpan, columnSpan = newColSpan) }
         }
+    }
+
+    private suspend fun updateFolderAppInActiveOrientation(
+        folderId: String,
+        folderApp: FolderApp,
+        transform: (FolderApp) -> FolderApp,
+    ) {
+        val currentLayout = _homeLayoutState.value
+        val folder = currentLayout.items.filterIsInstance<HomeItem.Folder>()
+            .find { it.id == folderId } ?: return
+        var found = false
+        val updatedApps = folder.apps.map { app ->
+            if (!found && isSameFolderAppEntry(app, folderApp)) {
+                found = true; transform(app)
+            } else app
+        }
+        if (!found) return
+        val updatedFolder = folder.copy(apps = updatedApps)
+        val updatedItems = currentLayout.items.map { if (it.id == folderId) updatedFolder else it }
+        settingsRepository.saveHomeLayout(currentLayout.copy(items = updatedItems))
     }
 
     private fun findNextAvailablePositionInFolder(folder: HomeItem.Folder, widthSpan: Int = 1, heightSpan: Int = 1): Pair<Int, Int>? {

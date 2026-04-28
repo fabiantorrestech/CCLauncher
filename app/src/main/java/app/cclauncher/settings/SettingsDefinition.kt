@@ -226,7 +226,7 @@ data class AppSettings(
         category = Appearance::class,
         type = Slider::class,
         min = 0.5f,
-        max = 2.0f,
+        max = 3.0f,
         step = 0.1f,
         key = "TEXT_SIZE_SCALE",
     )
@@ -343,7 +343,7 @@ data class AppSettings(
         category = Appearance::class,
         type = Slider::class,
         min = 0.5f,
-        max = 2.0f,
+        max = 3.0f,
         step = 0.1f
     )
     val searchResultsFontSize: Float = 1.0f,

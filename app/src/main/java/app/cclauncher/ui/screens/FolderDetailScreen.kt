@@ -262,8 +262,8 @@ fun FolderDetailScreen(
                     onValueChangeFinished = {
                         viewModel.updateFolderAppTextSize(folderId, appTextSize)
                     },
-                    valueRange = 0.5f..2.0f,
-                    steps = 29,
+                    valueRange = 0.5f..3.0f,
+                    steps = 49,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(16.dp))

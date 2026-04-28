@@ -1346,8 +1346,8 @@ fun HomeAppContextMenu(
                     AppSlider(
                         value = textSize,
                         onValueChange = { textSize = it },
-                        valueRange = 0.5f..2.0f,
-                        steps = 29,
+                        valueRange = 0.5f..3.0f,
+                        steps = 49,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -2166,8 +2166,8 @@ fun FolderContextMenu(
                     AppSlider(
                         value = textSize,
                         onValueChange = { textSize = it },
-                        valueRange = 0.5f..2.0f,
-                        steps = 29,
+                        valueRange = 0.5f..3.0f,
+                        steps = 49,
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(modifier = Modifier.height(8.dp))

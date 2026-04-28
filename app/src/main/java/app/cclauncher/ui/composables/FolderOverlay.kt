@@ -14,15 +14,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import app.cclauncher.ui.components.ContextMenuItemRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -254,38 +264,49 @@ fun FolderOverlay(
                 onDismissRequest = { appContextMenu = null },
                 title = { Text(app.appLabel) },
                 text = {
-                    Column {
-                        DropdownMenuItem(
-                            text = { Text("Open") },
-                            onClick = { onLaunchApp(app); appContextMenu = null }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
+                        ContextMenuItemRow(
+                            text = "Open",
+                            icon = Icons.AutoMirrored.Filled.OpenInNew,
+                            onClick = { onLaunchApp(app); appContextMenu = null },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Move") },
+                        ContextMenuItemRow(
+                            text = "Move",
+                            icon = Icons.Default.OpenWith,
                             onClick = {
                                 movingApp = app
                                 appContextMenu = null
                                 context.showToast("Tap where you want to move the app", Toast.LENGTH_SHORT)
-                            }
+                            },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Resize") },
-                            onClick = { resizingApp = app; appContextMenu = null }
+                        ContextMenuItemRow(
+                            text = "Resize",
+                            icon = Icons.Default.AspectRatio,
+                            onClick = { resizingApp = app; appContextMenu = null },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Customize...") },
-                            onClick = { appCustomizeMenu = app; appContextMenu = null }
+                        ContextMenuItemRow(
+                            text = "Customize...",
+                            icon = Icons.Default.Edit,
+                            onClick = { appCustomizeMenu = app; appContextMenu = null },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Rename") },
+                        ContextMenuItemRow(
+                            text = "Rename",
+                            icon = Icons.Default.DriveFileRenameOutline,
                             onClick = {
                                 appRenameValue = app.appLabel
                                 appRenameMenu = app
                                 appContextMenu = null
-                            }
+                            },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Remove from Folder") },
-                            onClick = { onRemoveApp(app); appContextMenu = null }
+                        ContextMenuItemRow(
+                            text = "Remove from Folder",
+                            icon = Icons.Default.Delete,
+                            onClick = { onRemoveApp(app); appContextMenu = null },
                         )
                     }
                 },
@@ -472,8 +493,8 @@ fun FolderOverlay(
                         AppSlider(
                             value = textSize,
                             onValueChange = { textSize = it },
-                            valueRange = 0.5f..2.0f,
-                            steps = 29,
+                            valueRange = 0.5f..3.0f,
+                            steps = 49,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Spacer(modifier = Modifier.height(8.dp))
