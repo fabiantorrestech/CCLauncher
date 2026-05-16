@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
+import app.cclauncher.ui.components.AnimatedContextMenuDialog
 import app.cclauncher.ui.components.ContextMenuItemRow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +41,8 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,15 +55,19 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.cclauncher.ui.theme.AnimationConfig
+import kotlinx.coroutines.delay
 import app.cclauncher.LocalLauncherFontSettings
 import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
@@ -94,6 +101,36 @@ fun FolderOverlay(
     onAppResetFont: (FolderApp) -> Unit = {},
 ) {
     val context = LocalContext.current
+
+    val animationsEnabled = settings.folderAnimationsEnabled
+    var enterVisible by remember { mutableStateOf(false) }
+    var exitRequested by remember { mutableStateOf(false) }
+    val animAlpha by animateFloatAsState(
+        targetValue = when { exitRequested -> 0f; enterVisible -> 1f; else -> 0f },
+        animationSpec = when {
+            !animationsEnabled -> androidx.compose.animation.core.snap()
+            exitRequested -> AnimationConfig.overlayAlphaExitKeyframe
+            else -> AnimationConfig.overlayAlphaEnter
+        },
+        label = "folderOverlayAlpha"
+    )
+    val animBlur by animateDpAsState(
+        targetValue = when { exitRequested -> 28.dp; enterVisible -> 0.dp; else -> 28.dp },
+        animationSpec = when {
+            !animationsEnabled -> androidx.compose.animation.core.snap()
+            exitRequested -> AnimationConfig.overlayBlurExit
+            else -> AnimationConfig.overlayBlurEnter
+        },
+        label = "folderOverlayBlur"
+    )
+    LaunchedEffect(Unit) { enterVisible = true }
+    LaunchedEffect(exitRequested) {
+        if (exitRequested) {
+            delay(if (animationsEnabled) AnimationConfig.OVERLAY_EXIT.toLong() else 0L)
+            onDismiss()
+        }
+    }
+
     var movingApp by remember { mutableStateOf<FolderApp?>(null) }
     var appContextMenu by remember { mutableStateOf<FolderApp?>(null) }
     var appCustomizeMenu by remember { mutableStateOf<FolderApp?>(null) }
@@ -134,18 +171,20 @@ fun FolderOverlay(
         return true
     }
 
-    BackHandler { onDismiss() }
+    BackHandler { exitRequested = true }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .graphicsLayer { alpha = animAlpha }
+            .blur(animBlur)
             .background(Color.Black.copy(alpha = settings.folderBackgroundOpacity))
             // Consume drag events so swipe gestures on the backdrop don't leak through
             // to the home screen gesture handler underneath.
             .pointerInput(Unit) { detectDragGestures(onDrag = { change, _ -> change.consume() }) }
             .then(
                 if (folder.tapOutsideToClose)
-                    Modifier.pointerInput(Unit) { detectTapGestures { onDismiss() } }
+                    Modifier.pointerInput(Unit) { detectTapGestures { exitRequested = true } }
                 else Modifier
             )
     ) {
@@ -194,7 +233,7 @@ fun FolderOverlay(
                         }
                         if (!folder.hideCloseButton) {
                             IconButton(
-                                onClick = onDismiss,
+                                onClick = { exitRequested = true },
                                 modifier = Modifier.align(Alignment.CenterEnd),
                             ) {
                                 Icon(
@@ -237,7 +276,7 @@ fun FolderOverlay(
                                         if (app != null) {
                                             onLaunchApp(app)
                                         } else if (folder.tapOutsideToClose) {
-                                            onDismiss()
+                                            exitRequested = true
                                         }
                                     }
                                 }
@@ -259,112 +298,115 @@ fun FolderOverlay(
         }
 
         // Context menu for app inside folder
-        appContextMenu?.let { app ->
-            AlertDialog(
-                onDismissRequest = { appContextMenu = null },
-                title = { Text(app.appLabel) },
-                text = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 360.dp)
-                            .verticalScroll(rememberScrollState()),
-                    ) {
-                        ContextMenuItemRow(
-                            text = "Open",
-                            icon = Icons.AutoMirrored.Filled.OpenInNew,
-                            onClick = { onLaunchApp(app); appContextMenu = null },
-                        )
-                        ContextMenuItemRow(
-                            text = "Move",
-                            icon = Icons.Default.OpenWith,
-                            onClick = {
-                                movingApp = app
-                                appContextMenu = null
-                                context.showToast("Tap where you want to move the app", Toast.LENGTH_SHORT)
-                            },
-                        )
-                        ContextMenuItemRow(
-                            text = "Resize",
-                            icon = Icons.Default.AspectRatio,
-                            onClick = { resizingApp = app; appContextMenu = null },
-                        )
-                        ContextMenuItemRow(
-                            text = "Customize...",
-                            icon = Icons.Default.Edit,
-                            onClick = { appCustomizeMenu = app; appContextMenu = null },
-                        )
-                        ContextMenuItemRow(
-                            text = "Rename",
-                            icon = Icons.Default.DriveFileRenameOutline,
-                            onClick = {
-                                appRenameValue = app.appLabel
-                                appRenameMenu = app
-                                appContextMenu = null
-                            },
-                        )
-                        ContextMenuItemRow(
-                            text = "Remove from Folder",
-                            icon = Icons.Default.Delete,
-                            onClick = { onRemoveApp(app); appContextMenu = null },
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { appContextMenu = null }) { Text("Close") }
+        val contextMenuApp = appContextMenu
+        AnimatedContextMenuDialog(
+            visible = contextMenuApp != null,
+            onDismissRequest = { appContextMenu = null },
+            animationsEnabled = settings.folderAnimationsEnabled,
+            title = contextMenuApp?.let { app -> { Text(app.appLabel) } },
+            confirmButton = {
+                TextButton(onClick = { appContextMenu = null }) { Text("Close") }
+            },
+        ) {
+            if (contextMenuApp != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    ContextMenuItemRow(
+                        text = "Open",
+                        icon = Icons.AutoMirrored.Filled.OpenInNew,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = { onLaunchApp(contextMenuApp); appContextMenu = null },
+                    )
+                    ContextMenuItemRow(
+                        text = "Move",
+                        icon = Icons.Default.OpenWith,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = {
+                            movingApp = contextMenuApp
+                            appContextMenu = null
+                            context.showToast("Tap where you want to move the app", Toast.LENGTH_SHORT)
+                        },
+                    )
+                    ContextMenuItemRow(
+                        text = "Resize",
+                        icon = Icons.Default.AspectRatio,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = { resizingApp = contextMenuApp; appContextMenu = null },
+                    )
+                    ContextMenuItemRow(
+                        text = "Customize...",
+                        icon = Icons.Default.Edit,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = { appCustomizeMenu = contextMenuApp; appContextMenu = null },
+                    )
+                    ContextMenuItemRow(
+                        text = "Rename",
+                        icon = Icons.Default.DriveFileRenameOutline,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = {
+                            appRenameValue = contextMenuApp.appLabel
+                            appRenameMenu = contextMenuApp
+                            appContextMenu = null
+                        },
+                    )
+                    ContextMenuItemRow(
+                        text = "Remove from Folder",
+                        icon = Icons.Default.Delete,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = { onRemoveApp(contextMenuApp); appContextMenu = null },
+                    )
                 }
-            )
+            }
         }
 
-        appCustomizeMenu?.let { app ->
-            AlertDialog(
-                onDismissRequest = { appCustomizeMenu = null },
-                title = { Text("Customize ${app.appLabel}") },
-                text = {
-                    Column {
-                        DropdownMenuItem(
-                            text = { Text("Text Size...") },
-                            onClick = {
-                                textSizingApp = app
-                                appCustomizeMenu = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Label Alignment...") },
-                            onClick = {
-                                alignmentApp = app
-                                appCustomizeMenu = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Select Font...") },
-                            onClick = {
-                                appFontMenu = app
-                                appCustomizeMenu = null
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Tags...") },
-                            onClick = {
-                                appTagsMenu = app
-                                appCustomizeMenu = null
-                            }
-                        )
-                        if (app.isSystemShortcut && settings.showShortcutIcon) {
-                            DropdownMenuItem(
-                                text = { Text("Change Icon Placement...") },
-                                onClick = {
-                                    iconPlacementApp = app
-                                    appCustomizeMenu = null
-                                }
-                            )
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { appCustomizeMenu = null }) { Text("Close") }
+        val customizeMenuApp = appCustomizeMenu
+        AnimatedContextMenuDialog(
+            visible = customizeMenuApp != null,
+            onDismissRequest = { appCustomizeMenu = null },
+            animationsEnabled = settings.folderAnimationsEnabled,
+            title = customizeMenuApp?.let { app -> { Text("Customize ${app.appLabel}") } },
+            confirmButton = {
+                TextButton(onClick = { appCustomizeMenu = null }) { Text("Close") }
+            },
+        ) {
+            if (customizeMenuApp != null) {
+                ContextMenuItemRow(
+                    text = "Text Size...",
+                    icon = Icons.Default.AspectRatio,
+                    animationsEnabled = settings.folderAnimationsEnabled,
+                    onClick = { textSizingApp = customizeMenuApp; appCustomizeMenu = null },
+                )
+                ContextMenuItemRow(
+                    text = "Label Alignment...",
+                    icon = Icons.Default.Edit,
+                    animationsEnabled = settings.folderAnimationsEnabled,
+                    onClick = { alignmentApp = customizeMenuApp; appCustomizeMenu = null },
+                )
+                ContextMenuItemRow(
+                    text = "Select Font...",
+                    icon = Icons.Default.DriveFileRenameOutline,
+                    animationsEnabled = settings.folderAnimationsEnabled,
+                    onClick = { appFontMenu = customizeMenuApp; appCustomizeMenu = null },
+                )
+                ContextMenuItemRow(
+                    text = "Tags...",
+                    icon = Icons.Default.Edit,
+                    animationsEnabled = settings.folderAnimationsEnabled,
+                    onClick = { appTagsMenu = customizeMenuApp; appCustomizeMenu = null },
+                )
+                if (customizeMenuApp.isSystemShortcut && settings.showShortcutIcon) {
+                    ContextMenuItemRow(
+                        text = "Change Icon Placement...",
+                        icon = Icons.Default.OpenWith,
+                        animationsEnabled = settings.folderAnimationsEnabled,
+                        onClick = { iconPlacementApp = customizeMenuApp; appCustomizeMenu = null },
+                    )
                 }
-            )
+            }
         }
 
         appTagsMenu?.let { app ->

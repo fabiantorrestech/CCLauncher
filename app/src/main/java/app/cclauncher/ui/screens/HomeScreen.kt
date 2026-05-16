@@ -138,6 +138,7 @@ import app.cclauncher.settings.cornerZoneDangerFadeFor
 import app.cclauncher.settings.cornerZonesInFoldersFor
 import app.cclauncher.settings.swipeActionFor
 import app.cclauncher.settings.swipeFolderIdFor
+import app.cclauncher.ui.components.AnimatedContextMenuDialog
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.AppSlider
 import app.cclauncher.ui.components.ContextMenuItemRow
@@ -516,6 +517,7 @@ fun HomeScreen(
                         viewModel.updateHomeAppLabelFont(it, "")
                     },
                     onNavigateToSettings = onNavigateToSettings,
+                    animationsEnabled = settings.contextMenuAnimationsEnabled,
                 )
             }
         }
@@ -563,6 +565,7 @@ fun HomeScreen(
                         widgetBeingMoved = null
                         showWidgetContextMenu = null
                     },
+                    animationsEnabled = settings.contextMenuAnimationsEnabled,
                 )
             }
         }
@@ -615,64 +618,65 @@ fun HomeScreen(
         }
 
         // Folder context menu
-        showFolderContextMenu?.let { folderItem ->
-            val currentFolder = homeLayoutState.items.find { it.id == folderItem.id } as? HomeItem.Folder
-            currentFolder?.let {
-                FolderContextMenu(
-                    folderItem = it,
-                    pageCount = homeLayoutState.pageCount,
-                    onDismiss = { showFolderContextMenu = null },
-                    onRemoveFromHome = { folder ->
-                        viewModel.setFolderShowOnHome(folder.id, false)
-                        showFolderContextMenu = null
-                    },
-                    onDelete = { folder ->
-                        viewModel.removeFolder(folder)
-                        showFolderContextMenu = null
-                    },
-                    onResize = { folder ->
-                        resizeDialogItem = folder
-                        showFolderContextMenu = null
-                    },
-                    onMove = { folder ->
-                        folderBeingMoved = folder
-                        showFolderContextMenu = null
-                        context.showToast("Tap where you want to move the folder")
-                    },
-                    onMoveToPage = { folder, targetPage ->
-                        viewModel.moveItemToPage(folder, targetPage)
-                        showFolderContextMenu = null
-                    },
-                    onRename = { folder, newTitle ->
-                        viewModel.renameFolder(folder.id, newTitle)
-                        showFolderContextMenu = null
-                    },
-                    onTextSizeChange = { textSize ->
-                        viewModel.updateFolderTitleTextSize(it.id, textSize)
-                    },
-                    onLabelAlignmentChange = { alignment ->
-                        viewModel.updateFolderTitleLabelAlignment(it.id, alignment)
-                    },
-                    showFolderIconSetting = settings.showFolderIcon,
-                    onIconPlacementChange = { placement ->
-                        viewModel.updateFolderIconPlacement(it.id, placement)
-                    },
-                    onSelectFont = {
-                        pendingFolderTitleFontItem = it
-                        pendingHomeAppFontItem = null
-                        pendingFolderAppFontItem = null
-                        fontPickerLauncher.launch("font/*")
-                    },
-                    onResetFont = {
-                        if (it.titleFontPath.isNotBlank()) {
-                            viewModel.settingsRepository.deleteFontFile(it.titleFontPath)
-                        }
-                        viewModel.updateFolderTitleFont(it.id, "")
-                    },
-                    onNavigateToSettings = onNavigateToSettings,
-                )
-            }
+        val currentFolderContextMenu = showFolderContextMenu?.let { f ->
+            homeLayoutState.items.find { it.id == f.id } as? HomeItem.Folder
         }
+        FolderContextMenu(
+            folderItem = currentFolderContextMenu,
+            pageCount = homeLayoutState.pageCount,
+            onDismiss = { showFolderContextMenu = null },
+            onRemoveFromHome = { folder ->
+                viewModel.setFolderShowOnHome(folder.id, false)
+                showFolderContextMenu = null
+            },
+            onDelete = { folder ->
+                viewModel.removeFolder(folder)
+                showFolderContextMenu = null
+            },
+            onResize = { folder ->
+                resizeDialogItem = folder
+                showFolderContextMenu = null
+            },
+            onMove = { folder ->
+                folderBeingMoved = folder
+                showFolderContextMenu = null
+                context.showToast("Tap where you want to move the folder")
+            },
+            onMoveToPage = { folder, targetPage ->
+                viewModel.moveItemToPage(folder, targetPage)
+                showFolderContextMenu = null
+            },
+            onRename = { folder, newTitle ->
+                viewModel.renameFolder(folder.id, newTitle)
+                showFolderContextMenu = null
+            },
+            onTextSizeChange = { textSize ->
+                currentFolderContextMenu?.let { viewModel.updateFolderTitleTextSize(it.id, textSize) }
+            },
+            onLabelAlignmentChange = { alignment ->
+                currentFolderContextMenu?.let { viewModel.updateFolderTitleLabelAlignment(it.id, alignment) }
+            },
+            showFolderIconSetting = settings.showFolderIcon,
+            onIconPlacementChange = { placement ->
+                currentFolderContextMenu?.let { viewModel.updateFolderIconPlacement(it.id, placement) }
+            },
+            onSelectFont = {
+                pendingFolderTitleFontItem = currentFolderContextMenu
+                pendingHomeAppFontItem = null
+                pendingFolderAppFontItem = null
+                fontPickerLauncher.launch("font/*")
+            },
+            onResetFont = {
+                currentFolderContextMenu?.let { folder ->
+                    if (folder.titleFontPath.isNotBlank()) {
+                        viewModel.settingsRepository.deleteFontFile(folder.titleFontPath)
+                    }
+                    viewModel.updateFolderTitleFont(folder.id, "")
+                }
+            },
+            onNavigateToSettings = onNavigateToSettings,
+            animationsEnabled = settings.contextMenuAnimationsEnabled,
+        )
 
         // Resize dialog
         ResizeDialog(
@@ -1148,6 +1152,7 @@ fun WidgetContextMenu(
     onNavigateToSettings: () -> Unit = {},
     isBeingMoved: Boolean = false,
     onCancelMove: () -> Unit = {},
+    animationsEnabled: Boolean = true,
 ) {
     if (widgetItem == null) return
 
@@ -1175,8 +1180,10 @@ fun WidgetContextMenu(
             }
         )
     } else {
-        AlertDialog(
+        AnimatedContextMenuDialog(
+            visible = true,
             onDismissRequest = onDismiss,
+            animationsEnabled = animationsEnabled,
             title = {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Text("Widget Options", modifier = Modifier.align(Alignment.CenterStart))
@@ -1192,58 +1199,64 @@ fun WidgetContextMenu(
                     }
                 }
             },
-            text = {
-                ScrollableDialogMenu {
-                    if (isBeingMoved) {
-                        ContextMenuItemRow(
-                            text = "Cancel Move",
-                            icon = Icons.Default.Edit,
-                            onClick = { onCancelMove(); onDismiss() }
-                        )
-                    } else {
-                        ContextMenuItemRow(
-                            text = "Move",
-                            icon = Icons.Default.OpenWith,
-                            onClick = { onMove(widgetItem); onDismiss() }
-                        )
-                    }
-                    if (!isBeingMoved && (pageCount > 1 || pageCount < MAX_PAGES)) {
-                        ContextMenuItemRow(
-                            text = "Move to page...",
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            onClick = { showPageSelector = true }
-                        )
-                    }
-                    ContextMenuItemRow(
-                        text = "Resize",
-                        icon = Icons.Default.AspectRatio,
-                        onClick = { onResize(widgetItem); onDismiss() }
-                    )
-                    if (canReconfigure) {
-                        ContextMenuItemRow(
-                            text = "Configure",
-                            icon = Icons.Default.Settings,
-                            onClick = { onConfigure(widgetItem); onDismiss() }
-                        )
-                    }
-                    if (widgetItem.isPlaceholder) {
-                        ContextMenuItemRow(
-                            text = "Copy Details",
-                            icon = Icons.Default.ContentCopy,
-                            onClick = { onCopyDetails(widgetItem); onDismiss() }
-                        )
-                    }
-                    ContextMenuItemRow(
-                        text = "Remove",
-                        icon = Icons.Default.Delete,
-                        onClick = { onRemove(widgetItem); onDismiss() }
-                    )
-                }
-            },
             confirmButton = {
                 TextButton(onClick = onDismiss) { Text("Close") }
+            },
+        ) {
+            ScrollableDialogMenu {
+                if (isBeingMoved) {
+                    ContextMenuItemRow(
+                        text = "Cancel Move",
+                        icon = Icons.Default.Edit,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { onCancelMove(); onDismiss() }
+                    )
+                } else {
+                    ContextMenuItemRow(
+                        text = "Move",
+                        icon = Icons.Default.OpenWith,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { onMove(widgetItem); onDismiss() }
+                    )
+                }
+                if (!isBeingMoved && (pageCount > 1 || pageCount < MAX_PAGES)) {
+                    ContextMenuItemRow(
+                        text = "Move to page...",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { showPageSelector = true }
+                    )
+                }
+                ContextMenuItemRow(
+                    text = "Resize",
+                    icon = Icons.Default.AspectRatio,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onResize(widgetItem); onDismiss() }
+                )
+                if (canReconfigure) {
+                    ContextMenuItemRow(
+                        text = "Configure",
+                        icon = Icons.Default.Settings,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { onConfigure(widgetItem); onDismiss() }
+                    )
+                }
+                if (widgetItem.isPlaceholder) {
+                    ContextMenuItemRow(
+                        text = "Copy Details",
+                        icon = Icons.Default.ContentCopy,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { onCopyDetails(widgetItem); onDismiss() }
+                    )
+                }
+                ContextMenuItemRow(
+                    text = "Remove",
+                    icon = Icons.Default.Delete,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onRemove(widgetItem); onDismiss() }
+                )
             }
-        )
+        }
     }
 }
 
@@ -1312,6 +1325,7 @@ fun HomeAppContextMenu(
     onSelectFont: () -> Unit = {},
     onResetFont: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    animationsEnabled: Boolean = true,
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showFolderPicker by remember { mutableStateOf(false) }
@@ -1504,8 +1518,10 @@ fun HomeAppContextMenu(
             }
         )
     } else {
-        AlertDialog(
+        AnimatedContextMenuDialog(
+            visible = true,
             onDismissRequest = onDismiss,
+            animationsEnabled = animationsEnabled,
             title = {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Text("App Options", modifier = Modifier.align(Alignment.CenterStart))
@@ -1521,53 +1537,59 @@ fun HomeAppContextMenu(
                     }
                 }
             },
-            text = {
-                ScrollableDialogMenu {
-                    ContextMenuItemRow(
-                        text = "Move",
-                        icon = Icons.Default.OpenWith,
-                        onClick = { onMove(appItem); onDismiss() }
-                    )
-                    if (pageCount > 1 || pageCount < MAX_PAGES) {
-                        ContextMenuItemRow(
-                            text = "Move to page...",
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            onClick = { showPageSelector = true }
-                        )
-                    }
-                    ContextMenuItemRow(
-                        text = "Resize",
-                        icon = Icons.Default.AspectRatio,
-                        onClick = { onResize(appItem); onDismiss() }
-                    )
-                    ContextMenuItemRow(
-                        text = "Customize...",
-                        icon = Icons.Default.Edit,
-                        onClick = { showCustomizeMenu = true }
-                    )
-                    ContextMenuItemRow(
-                        text = "Rename",
-                        icon = Icons.Default.DriveFileRenameOutline,
-                        onClick = { showRenameDialog = true }
-                    )
-                    if (folders.isNotEmpty() && onAddToFolder != null) {
-                        ContextMenuItemRow(
-                            text = "Add to Folder...",
-                            icon = Icons.Default.Folder,
-                            onClick = { showFolderPicker = true }
-                        )
-                    }
-                    ContextMenuItemRow(
-                        text = "Remove",
-                        icon = Icons.Default.Delete,
-                        onClick = { onRemove(appItem); onDismiss() }
-                    )
-                }
-            },
             confirmButton = {
                 TextButton(onClick = onDismiss) { Text("Close") }
+            },
+        ) {
+            ScrollableDialogMenu {
+                ContextMenuItemRow(
+                    text = "Move",
+                    icon = Icons.Default.OpenWith,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onMove(appItem); onDismiss() }
+                )
+                if (pageCount > 1 || pageCount < MAX_PAGES) {
+                    ContextMenuItemRow(
+                        text = "Move to page...",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { showPageSelector = true }
+                    )
+                }
+                ContextMenuItemRow(
+                    text = "Resize",
+                    icon = Icons.Default.AspectRatio,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onResize(appItem); onDismiss() }
+                )
+                ContextMenuItemRow(
+                    text = "Customize...",
+                    icon = Icons.Default.Edit,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { showCustomizeMenu = true }
+                )
+                ContextMenuItemRow(
+                    text = "Rename",
+                    icon = Icons.Default.DriveFileRenameOutline,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { showRenameDialog = true }
+                )
+                if (folders.isNotEmpty() && onAddToFolder != null) {
+                    ContextMenuItemRow(
+                        text = "Add to Folder...",
+                        icon = Icons.Default.Folder,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { showFolderPicker = true }
+                    )
+                }
+                ContextMenuItemRow(
+                    text = "Remove",
+                    icon = Icons.Default.Delete,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onRemove(appItem); onDismiss() }
+                )
             }
-        )
+        }
     }
 }
 
@@ -2095,7 +2117,7 @@ private fun isInsideZoneTriangle(offset: Offset, size: Float, cornerPos: Int): B
 
 @Composable
 fun FolderContextMenu(
-    folderItem: HomeItem.Folder,
+    folderItem: HomeItem.Folder?,
     pageCount: Int = 1,
     onDismiss: () -> Unit,
     onRemoveFromHome: (HomeItem.Folder) -> Unit,
@@ -2111,6 +2133,7 @@ fun FolderContextMenu(
     onSelectFont: () -> Unit = {},
     onResetFont: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    animationsEnabled: Boolean = true,
 ) {
     var showPageSelector by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -2120,226 +2143,252 @@ fun FolderContextMenu(
     var showLabelAlignmentPicker by remember { mutableStateOf(false) }
     var showIconPlacementPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var renameValue by remember { mutableStateOf(folderItem.title) }
+    var renameValue by remember(folderItem?.title) { mutableStateOf(folderItem?.title ?: "") }
 
-    if (showPageSelector) {
-        PageSelectorDialog(
-            currentItemPage = folderItem.page,
-            pageCount = pageCount,
-            onDismiss = { showPageSelector = false },
-            onPageSelected = { targetPage ->
-                onMoveToPage(folderItem, targetPage)
-                showPageSelector = false
-                onDismiss()
+    val anySubDialog = showPageSelector || showRenameDialog || showCustomizeMenu ||
+            showFontMenu || showTextSizeEditor || showLabelAlignmentPicker ||
+            showIconPlacementPicker || showDeleteConfirm
+
+    // Primary animated context menu — always in composition so exit animation can play
+    AnimatedContextMenuDialog(
+        visible = folderItem != null && !anySubDialog,
+        onDismissRequest = onDismiss,
+        animationsEnabled = animationsEnabled,
+        instantExit = anySubDialog,
+        title = {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Text("Folder Options", modifier = Modifier.align(Alignment.CenterStart))
+                IconButton(
+                    onClick = { onNavigateToSettings(); onDismiss() },
+                    modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
-        )
-    } else if (showRenameDialog) {
-        AlertDialog(
-            onDismissRequest = { showRenameDialog = false },
-            title = { Text("Rename Folder") },
-            text = {
-                androidx.compose.material3.OutlinedTextField(
-                    value = renameValue,
-                    onValueChange = { renameValue = it },
-                    singleLine = true,
-                    label = { Text("Folder name") }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+    ) {
+        if (folderItem != null) {
+            ScrollableDialogMenu {
+                ContextMenuItemRow(
+                    text = "Move",
+                    icon = Icons.Default.OpenWith,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onMove(folderItem); onDismiss() }
                 )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onRename(folderItem, renameValue)
-                    showRenameDialog = false
-                }) { Text("Save") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
-            }
-        )
-    } else if (showTextSizeEditor) {
-        var textSize by remember { mutableFloatStateOf(folderItem.titleTextSize) }
-        AlertDialog(
-            onDismissRequest = { showTextSizeEditor = false },
-            title = { Text("Text Size") },
-            text = {
-                Column {
-                    Text("Size: ${"%.2f".format(textSize)}")
-                    AppSlider(
-                        value = textSize,
-                        onValueChange = { textSize = it },
-                        valueRange = 0.5f..3.0f,
-                        steps = 49,
-                        modifier = Modifier.fillMaxWidth(),
+                if (pageCount > 1 || pageCount < MAX_PAGES) {
+                    ContextMenuItemRow(
+                        text = "Move to page...",
+                        icon = Icons.AutoMirrored.Filled.MenuBook,
+                        animationsEnabled = animationsEnabled,
+                        onClick = { showPageSelector = true }
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(onClick = { textSize = 1.0f }) {
-                        Text("Reset to default")
-                    }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onTextSizeChange(textSize)
+                ContextMenuItemRow(
+                    text = "Resize",
+                    icon = Icons.Default.AspectRatio,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onResize(folderItem); onDismiss() }
+                )
+                ContextMenuItemRow(
+                    text = "Customize...",
+                    icon = Icons.Default.Edit,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { showCustomizeMenu = true }
+                )
+                ContextMenuItemRow(
+                    text = "Rename",
+                    icon = Icons.Default.DriveFileRenameOutline,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { showRenameDialog = true }
+                )
+                ContextMenuItemRow(
+                    text = "Remove",
+                    icon = Icons.Default.Delete,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { onRemoveFromHome(folderItem); onDismiss() }
+                )
+                ContextMenuItemRow(
+                    text = "Delete",
+                    icon = Icons.Default.Delete,
+                    animationsEnabled = animationsEnabled,
+                    onClick = { showDeleteConfirm = true }
+                )
+            }
+        }
+    }
+
+    // Sub-dialogs — shown alongside the primary menu (not in an else chain)
+    if (folderItem != null) {
+        if (showPageSelector) {
+            PageSelectorDialog(
+                currentItemPage = folderItem.page,
+                pageCount = pageCount,
+                onDismiss = { showPageSelector = false },
+                onPageSelected = { targetPage ->
+                    onMoveToPage(folderItem, targetPage)
+                    showPageSelector = false
                     onDismiss()
-                }) { Text("Apply") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTextSizeEditor = false }) { Text("Cancel") }
-            }
-        )
-    } else if (showLabelAlignmentPicker) {
-        app.cclauncher.ui.composables.LabelAlignmentDialog(
-            currentAlignment = folderItem.titleLabelAlignment,
-            onDismiss = { showLabelAlignmentPicker = false },
-            onAlignmentSelected = { alignment ->
-                onLabelAlignmentChange(alignment)
-                showLabelAlignmentPicker = false
-                onDismiss()
-            }
-        )
-    } else if (showIconPlacementPicker) {
-        IconPlacementDialog(
-            currentPlacement = folderItem.iconPlacement,
-            onDismiss = { showIconPlacementPicker = false },
-            onPlacementSelected = { placement ->
-                onIconPlacementChange(placement)
-                showIconPlacementPicker = false
-                onDismiss()
-            }
-        )
-    } else if (showFontMenu) {
-        AlertDialog(
-            onDismissRequest = { showFontMenu = false },
-            title = { Text("Select Font") },
-            text = {
-                ScrollableDialogMenu {
-                    ContextMenuItemRow(
-                        text = "Select Font...",
-                        icon = Icons.Default.TextFields,
-                        onClick = { onSelectFont(); onDismiss() }
-                    )
-                    ContextMenuItemRow(
-                        text = "Default Font",
-                        icon = Icons.Default.TextFields,
-                        onClick = { onResetFont(); onDismiss() }
-                    )
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showFontMenu = false }) { Text("Back") }
-            }
-        )
-    } else if (showCustomizeMenu) {
-        AlertDialog(
-            onDismissRequest = { showCustomizeMenu = false },
-            title = { Text("Customize") },
-            text = {
-                ScrollableDialogMenu {
-                    ContextMenuItemRow(
-                        text = "Text Size...",
-                        icon = Icons.Default.TextFields,
-                        onClick = { showTextSizeEditor = true }
+            )
+        }
+        if (showRenameDialog) {
+            AlertDialog(
+                onDismissRequest = { showRenameDialog = false },
+                title = { Text("Rename Folder") },
+                text = {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = renameValue,
+                        onValueChange = { renameValue = it },
+                        singleLine = true,
+                        label = { Text("Folder name") }
                     )
-                    ContextMenuItemRow(
-                        text = "Label Alignment...",
-                        icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
-                        onClick = { showLabelAlignmentPicker = true }
-                    )
-                    ContextMenuItemRow(
-                        text = "Select Font...",
-                        icon = Icons.Default.TextFields,
-                        onClick = { showFontMenu = true }
-                    )
-                    if (showFolderIconSetting) {
-                        ContextMenuItemRow(
-                            text = "Change Icon Placement...",
-                            icon = Icons.Default.SwapHoriz,
-                            onClick = { showIconPlacementPicker = true }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onRename(folderItem, renameValue)
+                        showRenameDialog = false
+                    }) { Text("Save") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showRenameDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+        if (showTextSizeEditor) {
+            var textSize by remember { mutableFloatStateOf(folderItem.titleTextSize) }
+            AlertDialog(
+                onDismissRequest = { showTextSizeEditor = false },
+                title = { Text("Text Size") },
+                text = {
+                    Column {
+                        Text("Size: ${"%.2f".format(textSize)}")
+                        AppSlider(
+                            value = textSize,
+                            onValueChange = { textSize = it },
+                            valueRange = 0.5f..3.0f,
+                            steps = 49,
+                            modifier = Modifier.fillMaxWidth(),
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { textSize = 1.0f }) {
+                            Text("Reset to default")
+                        }
                     }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onTextSizeChange(textSize)
+                        onDismiss()
+                    }) { Text("Apply") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTextSizeEditor = false }) { Text("Cancel") }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCustomizeMenu = false }) { Text("Back") }
-            }
-        )
-    } else if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Folder") },
-            text = { Text("Are you sure? This will permanently delete the folder and all its contents.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDelete(folderItem)
-                    showDeleteConfirm = false
+            )
+        }
+        if (showLabelAlignmentPicker) {
+            app.cclauncher.ui.composables.LabelAlignmentDialog(
+                currentAlignment = folderItem.titleLabelAlignment,
+                onDismiss = { showLabelAlignmentPicker = false },
+                onAlignmentSelected = { alignment ->
+                    onLabelAlignmentChange(alignment)
+                    showLabelAlignmentPicker = false
                     onDismiss()
-                }) { Text("YES") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
-            }
-        )
-    } else {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Text("Folder Options", modifier = Modifier.align(Alignment.CenterStart))
-                    IconButton(
-                        onClick = { onNavigateToSettings(); onDismiss() },
-                        modifier = Modifier.align(Alignment.TopEnd).size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
                 }
-            },
-            text = {
-                ScrollableDialogMenu {
-                    ContextMenuItemRow(
-                        text = "Move",
-                        icon = Icons.Default.OpenWith,
-                        onClick = { onMove(folderItem); onDismiss() }
-                    )
-                    if (pageCount > 1 || pageCount < MAX_PAGES) {
+            )
+        }
+        if (showIconPlacementPicker) {
+            IconPlacementDialog(
+                currentPlacement = folderItem.iconPlacement,
+                onDismiss = { showIconPlacementPicker = false },
+                onPlacementSelected = { placement ->
+                    onIconPlacementChange(placement)
+                    showIconPlacementPicker = false
+                    onDismiss()
+                }
+            )
+        }
+        if (showFontMenu) {
+            AlertDialog(
+                onDismissRequest = { showFontMenu = false },
+                title = { Text("Select Font") },
+                text = {
+                    ScrollableDialogMenu {
                         ContextMenuItemRow(
-                            text = "Move to page...",
-                            icon = Icons.AutoMirrored.Filled.MenuBook,
-                            onClick = { showPageSelector = true }
+                            text = "Select Font...",
+                            icon = Icons.Default.TextFields,
+                            onClick = { onSelectFont(); onDismiss() }
+                        )
+                        ContextMenuItemRow(
+                            text = "Default Font",
+                            icon = Icons.Default.TextFields,
+                            onClick = { onResetFont(); onDismiss() }
                         )
                     }
-                    ContextMenuItemRow(
-                        text = "Resize",
-                        icon = Icons.Default.AspectRatio,
-                        onClick = { onResize(folderItem); onDismiss() }
-                    )
-                    ContextMenuItemRow(
-                        text = "Customize...",
-                        icon = Icons.Default.Edit,
-                        onClick = { showCustomizeMenu = true }
-                    )
-                    ContextMenuItemRow(
-                        text = "Rename",
-                        icon = Icons.Default.DriveFileRenameOutline,
-                        onClick = { showRenameDialog = true }
-                    )
-                    ContextMenuItemRow(
-                        text = "Remove",
-                        icon = Icons.Default.Delete,
-                        onClick = { onRemoveFromHome(folderItem); onDismiss() }
-                    )
-                    ContextMenuItemRow(
-                        text = "Delete",
-                        icon = Icons.Default.Delete,
-                        onClick = { showDeleteConfirm = true }
-                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { showFontMenu = false }) { Text("Back") }
                 }
-            },
-            confirmButton = {
-                TextButton(onClick = onDismiss) { Text("Close") }
-            }
-        )
+            )
+        }
+        if (showCustomizeMenu) {
+            AlertDialog(
+                onDismissRequest = { showCustomizeMenu = false },
+                title = { Text("Customize") },
+                text = {
+                    ScrollableDialogMenu {
+                        ContextMenuItemRow(
+                            text = "Text Size...",
+                            icon = Icons.Default.TextFields,
+                            onClick = { showTextSizeEditor = true }
+                        )
+                        ContextMenuItemRow(
+                            text = "Label Alignment...",
+                            icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
+                            onClick = { showLabelAlignmentPicker = true }
+                        )
+                        ContextMenuItemRow(
+                            text = "Select Font...",
+                            icon = Icons.Default.TextFields,
+                            onClick = { showFontMenu = true }
+                        )
+                        if (showFolderIconSetting) {
+                            ContextMenuItemRow(
+                                text = "Change Icon Placement...",
+                                icon = Icons.Default.SwapHoriz,
+                                onClick = { showIconPlacementPicker = true }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showCustomizeMenu = false }) { Text("Back") }
+                }
+            )
+        }
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete Folder") },
+                text = { Text("Are you sure? This will permanently delete the folder and all its contents.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        onDelete(folderItem)
+                        showDeleteConfirm = false
+                        onDismiss()
+                    }) { Text("YES") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
     }
 }

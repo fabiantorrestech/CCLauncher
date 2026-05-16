@@ -104,6 +104,7 @@ import app.cclauncher.helper.openSearch
 import app.cclauncher.helper.uninstall
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppListItem
+import app.cclauncher.ui.components.AnimatedContextMenuDialog
 import app.cclauncher.ui.components.AppTagsEditorDialog
 import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.components.PrivateSpaceIndicator
@@ -773,8 +774,10 @@ fun AppDrawerScreen(
                     dismissMenu()
                 }
             )
-        } else AlertDialog(
+        } else AnimatedContextMenuDialog(
+            visible = true,
             onDismissRequest = dismissMenu,
+            animationsEnabled = settings.contextMenuAnimationsEnabled,
             title = {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     Text(app.appLabel, modifier = Modifier.align(Alignment.CenterStart))
@@ -790,15 +793,15 @@ fun AppDrawerScreen(
                     }
                 }
             },
-            text = {
-                ScrollableAppDrawerContextMenu(
-                    actions = menuActions,
-                    listState = contextMenuListState,
-                    scrollbarOnLeft = settings.scrollbarOnLeft,
-                )
-            },
-            confirmButton = { TextButton(dismissMenu) { Text("Close") } }
-        )
+            confirmButton = { TextButton(dismissMenu) { Text("Close") } },
+        ) {
+            ScrollableAppDrawerContextMenu(
+                actions = menuActions,
+                listState = contextMenuListState,
+                scrollbarOnLeft = settings.scrollbarOnLeft,
+                animationsEnabled = settings.contextMenuAnimationsEnabled,
+            )
+        }
 
         if (renameDialogVisible) {
             AlertDialog(
@@ -927,6 +930,7 @@ private fun ScrollableAppDrawerContextMenu(
     actions: List<AppDrawerMenuAction>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     scrollbarOnLeft: Boolean,
+    animationsEnabled: Boolean = true,
 ) {
     Box(
         modifier = Modifier
@@ -949,6 +953,7 @@ private fun ScrollableAppDrawerContextMenu(
                 ContextMenuItemRow(
                     text = action.text,
                     icon = action.icon,
+                    animationsEnabled = animationsEnabled,
                     onClick = action.onClick,
                 )
             }

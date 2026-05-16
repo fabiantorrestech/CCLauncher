@@ -229,6 +229,7 @@ private val settingsTabs = listOf(
                     field("returnToHomeAfterApp"),
                     field("appDrawerTapToOpen"),
                     field("appDrawerLongPressEnabled"),
+                    field("contextMenuAnimationsEnabled"),
                 ),
             ),
             SettingsSectionSpec(
@@ -365,6 +366,7 @@ private val settingsTabs = listOf(
                     field("showFolderIcon"),
                     field("folderIconPlacement"),
                     field("folderBackgroundOpacity"),
+                    field("folderAnimationsEnabled"),
                 ),
             ),
             SettingsSectionSpec(

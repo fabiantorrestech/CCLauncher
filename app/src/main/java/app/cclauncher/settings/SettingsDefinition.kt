@@ -96,6 +96,15 @@ data class AppSettings(
     val autoOpenFilteredApp: Boolean = true,
 
     @Setting(
+        title = "Context Menu Animations",
+        description = "Enable scale/fade animations when context menus appear, dismiss, and when items are tapped.",
+        category = General::class,
+        type = Toggle::class,
+        key = "CONTEXT_MENU_ANIMATIONS_ENABLED",
+    )
+    val contextMenuAnimationsEnabled: Boolean = true,
+
+    @Setting(
         title = "Search Bar Placement",
         description = "Where the search bar sits in the app drawer",
         category = General::class,
@@ -1019,6 +1028,15 @@ data class AppSettings(
         key = "FOLDER_BACKGROUND_OPACITY",
     )
     val folderBackgroundOpacity: Float = 0.6f,
+
+    @Setting(
+        title = "Folder Animations",
+        description = "Enable blur/fade animations when opening and closing folders.",
+        category = Folders::class,
+        type = Toggle::class,
+        key = "FOLDER_ANIMATIONS_ENABLED",
+    )
+    val folderAnimationsEnabled: Boolean = true,
 
     @Persisted(key = "FIRST_OPEN") val firstOpen: Boolean = true,
     @Persisted(key = "FIRST_OPEN_TIME") val firstOpenTime: Long = 0L,

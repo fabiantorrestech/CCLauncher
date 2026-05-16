@@ -202,9 +202,9 @@ fun CLauncherNavigation(
                 NavDisplay.predictivePopTransitionSpec { _ -> AnimationConfig.Navigation.slideRightTransition() }
 
     val appDrawerTransitions =
-        NavDisplay.transitionSpec { AnimationConfig.Navigation.slideUpTransition() } +
-                NavDisplay.popTransitionSpec { AnimationConfig.Navigation.slideDownTransition() } +
-                NavDisplay.predictivePopTransitionSpec { _ -> AnimationConfig.Navigation.slideDownTransition() }
+        NavDisplay.transitionSpec { AnimationConfig.Navigation.appDrawerOpenTransition() } +
+                NavDisplay.popTransitionSpec { AnimationConfig.Navigation.appDrawerCloseTransition() } +
+                NavDisplay.predictivePopTransitionSpec { _ -> AnimationConfig.Navigation.appDrawerCloseTransition() }
 
     val hiddenAppsTransitions =
         NavDisplay.transitionSpec { AnimationConfig.Navigation.slideLeftTransition() } +

@@ -2,6 +2,7 @@ package app.cclauncher.ui.theme
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 
@@ -28,6 +29,23 @@ object AnimationConfig {
 
     val standardIntTween = tween<IntSize>(STANDARD, easing = standardEasing)
 
+
+    // Overlay animations (fade + blur, ported from android_shortcut_hub)
+    const val OVERLAY_ENTER = 320
+    const val OVERLAY_EXIT = 280
+    val overlayAlphaEnter = tween<Float>(OVERLAY_ENTER)
+    val overlayAlphaExit = tween<Float>(OVERLAY_EXIT)
+    val overlayBlurEnter = tween<Dp>(OVERLAY_ENTER)
+    val overlayBlurExit = tween<Dp>(OVERLAY_EXIT)
+    // Keyframe exit: hold alpha at 1.0 for the first 45% so blur is visible, then fade out
+    val overlayAlphaExitKeyframe = keyframes<Float> {
+        durationMillis = OVERLAY_EXIT
+        1f at (OVERLAY_EXIT * 0.45).toInt()
+        0f at OVERLAY_EXIT
+    }
+
+    // Context menu dialog animations
+    const val CONTEXT_MENU_EXIT_MS = 160
 
     // List item animations
     val listItemAnimationSpec = tween<IntOffset>(STANDARD, easing = standardEasing)
@@ -66,6 +84,22 @@ object AnimationConfig {
         ) togetherWith slideOutHorizontally(
             targetOffsetX = { it },
             animationSpec = tween(STANDARD, easing = standardEasing)
+        )
+
+        fun appDrawerOpenTransition() = (
+            slideInVertically(
+                initialOffsetY = { it / 4 },
+                animationSpec = tween(380, easing = emphasizedEasing)
+            ) + fadeIn(animationSpec = tween(220, easing = standardEasing))
+        ) togetherWith fadeOut(animationSpec = tween(180, easing = standardEasing))
+
+        fun appDrawerCloseTransition() = fadeIn(
+            animationSpec = tween(220, easing = standardEasing)
+        ) togetherWith (
+            slideOutVertically(
+                targetOffsetY = { it / 3 },
+                animationSpec = tween(280, easing = standardEasing)
+            ) + fadeOut(animationSpec = tween(200, easing = standardEasing))
         )
 
         fun fadeTransition() = fadeIn(
