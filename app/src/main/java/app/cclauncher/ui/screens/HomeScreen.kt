@@ -93,6 +93,7 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
@@ -972,6 +973,7 @@ private fun HomeScreenContent(
             val refs = pageItems.associate { it.id to createRef() }
 
             pageItems.forEach { item ->
+                key(item.id) {
                 val itemModifier = Modifier.constrainAs(refs.getValue(item.id)) {
                     top.linkTo(parent.top, margin = cellHeight * item.row)
                     start.linkTo(parent.start, margin = cellWidth * item.column)
@@ -1084,6 +1086,7 @@ private fun HomeScreenContent(
                         )
                     }
                 }
+                } // end key(item.id)
             }
         }
     }

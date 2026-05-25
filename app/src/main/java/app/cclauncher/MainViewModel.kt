@@ -1736,7 +1736,6 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     appWidgetHost.deleteAppWidgetId(widgetItem.appWidgetId)
                 }
                 settingsRepository.saveHomeLayout(newLayout)
-                settingsRepository.triggerHomeLayoutRefresh()
             } catch (e: Exception) {
                 Log.e("ViewModelWidget", "Error deleting widget ID ${widgetItem.appWidgetId}", e)
                 snackbarManager.show("Failed to remove widget.")
