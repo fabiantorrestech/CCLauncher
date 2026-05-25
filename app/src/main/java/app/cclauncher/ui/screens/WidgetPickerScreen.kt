@@ -10,14 +10,19 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicTextField
 import app.cclauncher.ui.components.ScrollbarIndicator
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +48,9 @@ fun WidgetPickerScreen(
     val widgetManager = AppWidgetManager.getInstance(context)
     var widgetList by remember { mutableStateOf<List<WidgetListItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
         isLoading = true
@@ -50,13 +58,83 @@ fun WidgetPickerScreen(
         isLoading = false
     }
 
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) focusRequester.requestFocus()
+    }
+
+    val pm = context.packageManager
+    val filteredList by remember(widgetList, searchQuery) {
+        derivedStateOf {
+            if (searchQuery.isBlank()) widgetList
+            else {
+                widgetList.mapNotNull { group ->
+                    if (group.appName.contains(searchQuery, ignoreCase = true)) {
+                        group
+                    } else {
+                        val matching = group.widgets.filter {
+                            it.loadLabel(pm).contains(searchQuery, ignoreCase = true)
+                        }
+                        if (matching.isNotEmpty()) group.copy(widgets = matching) else null
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Select Widget") },
+                title = {
+                    if (isSearchActive) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = MaterialTheme.colorScheme.onSurface
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        "Search widgets...",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    } else {
+                        Text("Select Widget")
+                    }
+                },
                 navigationIcon = {
-                    IconButton(onClick = onDismiss) {
+                    IconButton(onClick = {
+                        if (isSearchActive) {
+                            isSearchActive = false
+                            searchQuery = ""
+                        } else {
+                            onDismiss()
+                        }
+                    }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (isSearchActive) {
+                        IconButton(onClick = {
+                            isSearchActive = false
+                            searchQuery = ""
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close search")
+                        }
+                    } else {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
                     }
                 }
             )
@@ -70,12 +148,15 @@ fun WidgetPickerScreen(
         ) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (widgetList.isEmpty()) {
-                Text("No widgets found.", modifier = Modifier.align(Alignment.Center))
+            } else if (filteredList.isEmpty()) {
+                Text(
+                    if (searchQuery.isNotBlank()) "No widgets match your search." else "No widgets found.",
+                    modifier = Modifier.align(Alignment.Center)
+                )
             } else {
                 val listState = rememberLazyListState()
                 // 1 header + N widgets + 1 divider per group
-                val totalItems = widgetList.sumOf { 2 + it.widgets.size }
+                val totalItems = filteredList.sumOf { 2 + it.widgets.size }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     LazyColumn(
@@ -83,7 +164,7 @@ fun WidgetPickerScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(8.dp)
                     ) {
-                        widgetList.forEach { group ->
+                        filteredList.forEach { group ->
                             item {
                                 Text(
                                     text = group.appName,

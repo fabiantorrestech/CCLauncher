@@ -111,6 +111,8 @@ import app.cclauncher.ui.components.ContextMenuItemRow
 import app.cclauncher.ui.components.PrivateSpaceIndicator
 import app.cclauncher.ui.components.PrivateSpaceToggle
 import app.cclauncher.ui.theme.AnimationConfig
+import app.cclauncher.data.KeyModifier
+import app.cclauncher.ui.composables.KeyboardShortcutDialog
 import app.cclauncher.ui.util.detectSwipeGestures
 import app.cclauncher.ui.viewmodels.SettingsViewModel
 import kotlinx.coroutines.delay
@@ -771,10 +773,10 @@ fun AppDrawerScreen(
         if (showShortcutDialog) {
             val existingShortcut = viewModel.getShortcutForApp(app.getKey())
             val existingLabel = existingShortcut?.let {
-                val modName = if (it.modifier == app.cclauncher.data.KeyModifier.CTRL) "Ctrl" else "Alt"
+                val modName = if (it.modifier == KeyModifier.CTRL) "Ctrl" else "Alt"
                 "$modName+${android.view.KeyEvent.keyCodeToString(it.keyCode).removePrefix("KEYCODE_").replace('_', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }}"
             }
-            app.cclauncher.ui.composables.KeyboardShortcutDialog(
+            KeyboardShortcutDialog(
                 appName = app.appLabel,
                 currentShortcutLabel = existingLabel,
                 onAssign = { modifier, keyCode ->
