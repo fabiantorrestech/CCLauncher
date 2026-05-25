@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.SubdirectoryArrowRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -187,6 +188,7 @@ fun AppDrawerScreen(
     var showTagsEditor by remember { mutableStateOf(false) }
     var showFolderPickerForApp by remember { mutableStateOf<AppModel?>(null) }
     var pendingAddToHomeApp by remember { mutableStateOf<AppModel?>(null) }
+    var showShortcutDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -665,7 +667,7 @@ fun AppDrawerScreen(
         var newAppName by remember { mutableStateOf(app.appLabel) }
         val contextMenuListState = rememberLazyListState()
 
-        val dismissMenu = { showContextMenu = false; selectedApp = null }
+        val dismissMenu = { showContextMenu = false; selectedApp = null; showShortcutDialog = false }
         val privateSpaceUnlocked =
             viewModel.isPrivateSpaceSupported &&
                 viewModel.privateSpaceState.collectAsState().value == MainViewModel.PrivateSpaceState.Unlocked
@@ -734,6 +736,9 @@ fun AppDrawerScreen(
                         dismissMenu()
                     })
                 }
+                add(AppDrawerMenuAction("Assign Shortcut", Icons.Default.Keyboard) {
+                    showShortcutDialog = true
+                })
                 if (supportsShortcuts && !selectionMode) {
                     add(AppDrawerMenuAction("Shortcuts", Icons.Default.SubdirectoryArrowRight) {
                         shortcutsDialogApp = app
@@ -763,7 +768,22 @@ fun AppDrawerScreen(
             }
         }
 
-        if (showTagsEditor) {
+        if (showShortcutDialog) {
+            val existingShortcut = viewModel.getShortcutForApp(app.getKey())
+            val existingLabel = existingShortcut?.let {
+                val modName = if (it.modifier == app.cclauncher.data.KeyModifier.CTRL) "Ctrl" else "Alt"
+                "$modName+${android.view.KeyEvent.keyCodeToString(it.keyCode).removePrefix("KEYCODE_").replace('_', ' ').lowercase().replaceFirstChar { c -> c.uppercase() }}"
+            }
+            app.cclauncher.ui.composables.KeyboardShortcutDialog(
+                appName = app.appLabel,
+                currentShortcutLabel = existingLabel,
+                onAssign = { modifier, keyCode ->
+                    viewModel.setShortcutForApp(app, modifier, keyCode)
+                },
+                onClear = { viewModel.clearShortcutForApp(app) },
+                onDismiss = { showShortcutDialog = false },
+            )
+        } else if (showTagsEditor) {
             AppTagsEditorDialog(
                 title = "Tags for ${app.appLabel}",
                 initialTags = viewModel.getTagsForApp(app),

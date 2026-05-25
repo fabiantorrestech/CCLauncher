@@ -121,6 +121,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
     private val _appTags = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val appTags: StateFlow<Map<String, List<String>>> = _appTags.asStateFlow()
 
+    private val _keyboardShortcuts = MutableStateFlow<List<KeyboardShortcut>>(emptyList())
+    val keyboardShortcuts: StateFlow<List<KeyboardShortcut>> = _keyboardShortcuts.asStateFlow()
+
     // Reset launcher state
     private val _launcherResetFailed = MutableStateFlow(false)
     val launcherResetFailed: StateFlow<Boolean> = _launcherResetFailed.asStateFlow()
@@ -252,6 +255,12 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 .collect { tags ->
                     _appTags.value = tags
                 }
+        }
+
+        viewModelScope.launch {
+            settingsRepository.getKeyboardShortcuts().collect { shortcuts ->
+                _keyboardShortcuts.value = shortcuts
+            }
         }
 
         viewModelScope.launch {
@@ -2136,6 +2145,26 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 snackbarManager.show("Failed to launch app: ${e.message}")
             }
         }
+    }
+
+    fun setShortcutForApp(app: AppModel, modifier: Int, keyCode: Int) {
+        viewModelScope.launch {
+            settingsRepository.setKeyboardShortcut(app.getKey(), modifier, keyCode)
+        }
+    }
+
+    fun clearShortcutForApp(app: AppModel) {
+        viewModelScope.launch {
+            settingsRepository.clearKeyboardShortcut(app.getKey())
+        }
+    }
+
+    fun getShortcutForApp(appKey: String): KeyboardShortcut? =
+        _keyboardShortcuts.value.find { it.appKey == appKey }
+
+    fun launchAppByKey(appKey: String) {
+        val app = _appListAll.value.find { it.getKey() == appKey } ?: return
+        launchApp(app)
     }
 
     fun getAppShortcuts(app: AppModel, onResult: (List<AppShortcut>) -> Unit) {

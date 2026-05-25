@@ -1079,6 +1079,8 @@ data class AppSettings(
 
     @Persisted(key = "LANDSCAPE_HOME_DEFAULT_FIX_APPLIED")
     val landscapeHomeDefaultFixApplied: Boolean = false,
+
+    @Persisted(key = "KEYBOARD_SHORTCUTS_JSON") val keyboardShortcutsJson: String = "",
 )
 
 @Serializable

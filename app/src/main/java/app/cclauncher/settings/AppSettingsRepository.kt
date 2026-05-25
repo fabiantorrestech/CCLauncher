@@ -9,6 +9,8 @@ import android.util.Log
 import app.cclauncher.data.HomeLayout
 import app.cclauncher.data.HomeItem
 import app.cclauncher.data.HomeOrientation
+import app.cclauncher.data.KeyboardShortcut
+import app.cclauncher.data.KeyboardShortcutStorage
 import app.cclauncher.data.OrientationHomeLayouts
 import app.cclauncher.helper.AppTagStorage
 import app.cclauncher.helper.AppTagUtils
@@ -703,6 +705,32 @@ class AppSettingsRepository(private val context: Context): KoinComponent {
 
     suspend fun setFirstOpen(value: Boolean) = repo.set("firstOpen", value)
     suspend fun setAppTheme(value: Int) = repo.set("appTheme", value)
+
+    // Keyboard shortcuts
+    private fun readKeyboardShortcuts(s: AppSettings): List<KeyboardShortcut> =
+        KeyboardShortcutStorage.decode(s.keyboardShortcutsJson)
+
+    private fun writeKeyboardShortcuts(shortcuts: List<KeyboardShortcut>): String =
+        KeyboardShortcutStorage.encode(shortcuts)
+
+    fun getKeyboardShortcuts(): Flow<List<KeyboardShortcut>> =
+        settings.map { readKeyboardShortcuts(it) }.distinctUntilChanged()
+
+    suspend fun setKeyboardShortcut(appKey: String, modifier: Int, keyCode: Int) {
+        repo.update { s ->
+            val updated = readKeyboardShortcuts(s).toMutableList()
+            updated.removeAll { it.appKey == appKey }
+            updated.add(KeyboardShortcut(modifier = modifier, keyCode = keyCode, appKey = appKey))
+            s.copy(keyboardShortcutsJson = writeKeyboardShortcuts(updated))
+        }
+    }
+
+    suspend fun clearKeyboardShortcut(appKey: String) {
+        repo.update { s ->
+            val updated = readKeyboardShortcuts(s).filterNot { it.appKey == appKey }
+            s.copy(keyboardShortcutsJson = writeKeyboardShortcuts(updated))
+        }
+    }
 
     // Import/Export functionality
     suspend fun exportSettings(): ExportResult {

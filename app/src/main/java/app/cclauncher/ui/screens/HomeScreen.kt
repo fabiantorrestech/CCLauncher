@@ -111,7 +111,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -227,6 +230,21 @@ fun HomeScreen(
     var showPlaceholderWidgetDetails by remember { mutableStateOf<HomeItem.Widget?>(null) }
     var resizeDialogItem by remember { mutableStateOf<HomeItem?>(null) }
     var openFolderId by remember { mutableStateOf<String?>(null) }
+
+    var focusedItemId by remember { mutableStateOf<String?>(null) }
+    val keyboardShortcuts by viewModel.keyboardShortcuts.collectAsState()
+
+    val focusableItems by remember(homeLayoutState, pagerState.currentPage) {
+        derivedStateOf {
+            homeLayoutState.itemsForPage(pagerState.currentPage)
+                .filter { it is HomeItem.App || (it is HomeItem.Folder && it.showOnHome) }
+                .sortedWith(compareBy({ it.row }, { it.column }))
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        focusedItemId = null
+    }
     var pendingHomeAppFontItem by remember { mutableStateOf<HomeItem.App?>(null) }
     var pendingFolderTitleFontItem by remember { mutableStateOf<HomeItem.Folder?>(null) }
     var pendingFolderAppFontItem by remember { mutableStateOf<Pair<String, FolderApp>?>(null) }
@@ -348,31 +366,94 @@ fun HomeScreen(
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown) {
-                    when (event.key) {
-                        Key.DirectionUp -> {
-                            onSwipeDown()
-                            true
-                        }
-                        Key.DirectionDown -> {
-                            onSwipeUp()
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            onSwipeLeft()
-                            true
-                        }
-                        Key.DirectionRight -> {
-                            onSwipeRight()
-                            true
-                        }
-                        Key.DirectionCenter, Key.Enter -> {
-                            onNavigateToSettings()
-                            true
-                        }
-                        else -> false
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+
+                // Configurable hotkeys (Ctrl+key or Alt+key)
+                val modifierHeld = when {
+                    event.isCtrlPressed -> app.cclauncher.data.KeyModifier.CTRL
+                    event.isAltPressed -> app.cclauncher.data.KeyModifier.ALT
+                    else -> 0
+                }
+                if (modifierHeld != 0) {
+                    val sc = keyboardShortcuts.find {
+                        it.modifier == modifierHeld && it.keyCode == event.key.nativeKeyCode
                     }
-                } else false
+                    if (sc != null) {
+                        viewModel.launchAppByKey(sc.appKey)
+                        return@onKeyEvent true
+                    }
+                }
+
+                when (event.key) {
+                    // Meta/Windows key → open app drawer
+                    Key.MetaLeft, Key.MetaRight -> {
+                        onNavigateToAppDrawer()
+                        true
+                    }
+
+                    // Escape → dismiss overlays or clear grid focus
+                    Key.Escape -> {
+                        when {
+                            openFolderId != null -> { openFolderId = null; true }
+                            showAppContextMenu != null -> { showAppContextMenu = null; true }
+                            showWidgetContextMenu != null -> { showWidgetContextMenu = null; true }
+                            showFolderContextMenu != null -> { showFolderContextMenu = null; true }
+                            focusedItemId != null -> { focusedItemId = null; true }
+                            else -> false
+                        }
+                    }
+
+                    // Arrow keys → grid navigation
+                    Key.DirectionRight, Key.DirectionDown -> {
+                        val items = focusableItems
+                        if (items.isEmpty()) return@onKeyEvent false
+                        val currentIndex = items.indexOfFirst { it.id == focusedItemId }
+                        when {
+                            currentIndex == -1 -> focusedItemId = items.first().id
+                            currentIndex < items.size - 1 -> focusedItemId = items[currentIndex + 1].id
+                            else -> {
+                                goToNextPage()
+                                focusedItemId = null
+                            }
+                        }
+                        true
+                    }
+
+                    Key.DirectionLeft, Key.DirectionUp -> {
+                        val items = focusableItems
+                        if (items.isEmpty()) return@onKeyEvent false
+                        val currentIndex = items.indexOfFirst { it.id == focusedItemId }
+                        when {
+                            currentIndex == -1 -> focusedItemId = items.last().id
+                            currentIndex > 0 -> focusedItemId = items[currentIndex - 1].id
+                            else -> {
+                                goToPreviousPage()
+                                focusedItemId = null
+                            }
+                        }
+                        true
+                    }
+
+                    // Enter → launch focused item
+                    Key.DirectionCenter, Key.Enter -> {
+                        val focused = focusableItems.find { it.id == focusedItemId }
+                        when (focused) {
+                            is HomeItem.App -> {
+                                viewModel.launchApp(focused.appModel.withResolvedUser(context))
+                                focusedItemId = null
+                                true
+                            }
+                            is HomeItem.Folder -> {
+                                openFolderId = focused.id
+                                focusedItemId = null
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+
+                    else -> false
+                }
             }
     ) {
         HorizontalPager(
@@ -390,6 +471,7 @@ fun HomeScreen(
                 widgetBeingMoved = widgetBeingMoved,
                 appBeingMoved = appBeingMoved,
                 folderBeingMoved = folderBeingMoved,
+                focusedItemId = focusedItemId,
                 onAppClick = { item ->
                     viewModel.launchApp(item.appModel.withResolvedUser(context))
                 },
@@ -794,6 +876,7 @@ private fun HomeScreenPage(
     widgetBeingMoved: HomeItem.Widget?,
     appBeingMoved: HomeItem.App?,
     folderBeingMoved: HomeItem.Folder?,
+    focusedItemId: String?,
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
     onWidgetLongPress: (HomeItem.Widget) -> Unit,
@@ -896,6 +979,7 @@ private fun HomeScreenPage(
             widgetBeingMoved = widgetBeingMoved,
             appBeingMoved = appBeingMoved,
             folderBeingMoved = folderBeingMoved,
+            focusedItemId = focusedItemId,
             onAppClick = onAppClick,
             onAppLongPress = { app -> if (isMoving) onCancelMovement() else onAppLongPress(app) },
             onWidgetLongPress = onWidgetLongPress,
@@ -942,6 +1026,7 @@ private fun HomeScreenContent(
     widgetBeingMoved: HomeItem.Widget?,
     appBeingMoved: HomeItem.App?,
     folderBeingMoved: HomeItem.Folder?,
+    focusedItemId: String?,
     onAppClick: (HomeItem.App) -> Unit,
     onAppLongPress: (HomeItem.App) -> Unit,
     onWidgetLongPress: (HomeItem.Widget) -> Unit,
@@ -984,14 +1069,17 @@ private fun HomeScreenContent(
                 when (item) {
                     is HomeItem.App -> {
                         val isBeingMoved = appBeingMoved?.id == item.id
+                        val isFocused = !isBeingMoved && focusedItemId == item.id
 
-                        val appModifier = if (isBeingMoved) {
-                            itemModifier
+                        val appModifier = when {
+                            isBeingMoved -> itemModifier
                                 .padding(2.dp)
                                 .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
                                 .alpha(0.7f)
-                        } else {
-                            itemModifier.padding(2.dp)
+                            isFocused -> itemModifier
+                                .padding(2.dp)
+                                .border(2.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(8.dp))
+                            else -> itemModifier.padding(2.dp)
                         }
 
                         HomeAppItem(
@@ -1069,13 +1157,16 @@ private fun HomeScreenContent(
 
                     is HomeItem.Folder -> {
                         val isBeingMoved = folderBeingMoved?.id == item.id
-                        val folderModifier = if (isBeingMoved) {
-                            itemModifier
+                        val isFocused = !isBeingMoved && focusedItemId == item.id
+                        val folderModifier = when {
+                            isBeingMoved -> itemModifier
                                 .padding(2.dp)
                                 .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
                                 .alpha(0.7f)
-                        } else {
-                            itemModifier.padding(2.dp)
+                            isFocused -> itemModifier
+                                .padding(2.dp)
+                                .border(2.dp, MaterialTheme.colorScheme.secondary, RoundedCornerShape(8.dp))
+                            else -> itemModifier.padding(2.dp)
                         }
                         app.cclauncher.ui.composables.HomeFolderItem(
                             folder = item,
