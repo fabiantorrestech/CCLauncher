@@ -118,6 +118,11 @@ object Constants {
         const val LEFT = 0
         const val RIGHT = 1
     }
+
+    object LandscapeDrawerStyle {
+        const val SCROLLABLE_LIST = 0
+        const val PAGED_GRID = 1
+    }
 }
 
 object WidgetConstants {

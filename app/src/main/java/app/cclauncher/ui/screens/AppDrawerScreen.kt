@@ -30,9 +30,18 @@ import androidx.compose.ui.unit.Dp
 
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlin.math.floor
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -85,6 +94,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.layout.onSizeChanged
@@ -163,13 +173,15 @@ fun AppDrawerScreen(
         if (isLandscape) settings.showIconsInLandscape else settings.showIconsInPortrait
     } else { false }
 
-    val itemSpacing = when (settings.itemSpacing) {
+    val itemSpacing = when (if (isLandscape) settings.landscapeItemSpacing else settings.itemSpacing) {
         0 -> 0.dp; 1 -> 4.dp; 2 -> 8.dp; 3 -> 16.dp; else -> 4.dp
     }
 
-    val searchResultsFontSize = if (settings.searchResultsUseHomeFont) {
-        settings.textSizeScale
-    } else { settings.searchResultsFontSize }
+    val searchResultsFontSize = when {
+        isLandscape -> settings.landscapeSearchResultsFontSize
+        settings.searchResultsUseHomeFont -> settings.textSizeScale
+        else -> settings.searchResultsFontSize
+    }
 
     val fontWeight = when (settings.fontWeight) {
         0 -> FontWeight.Thin; 1 -> FontWeight.Light; 2 -> FontWeight.Normal
@@ -273,8 +285,9 @@ fun AppDrawerScreen(
 
     LaunchedEffect(Unit) { viewModel.loadApps() }
 
-    LaunchedEffect(settings.autoShowKeyboard, focusRequester, searchQuery) {
-        if (settings.autoShowKeyboard && searchQuery.isEmpty()) {
+    val effectiveAutoShowKeyboard = if (isLandscape) settings.landscapeAutoShowKeyboard else settings.autoShowKeyboard
+    LaunchedEffect(effectiveAutoShowKeyboard, focusRequester, searchQuery) {
+        if (effectiveAutoShowKeyboard && searchQuery.isEmpty()) {
             yield()
             try {
                 focusRequester.requestFocus()
@@ -291,9 +304,9 @@ fun AppDrawerScreen(
     val invertSearchResults = settings.invertSearchResultsOrder
     val reverseAppList = settings.reverseAppListDirection
     val avoidCutout = settings.avoidCameraBottomSearch
-    val showScrollbar = settings.showScrollbar
-    val scrollbarOnLeft = settings.scrollbarOnLeft
-    val isRightAligned = settings.appDrawerAlignment == Constants.AppDrawerAlignment.RIGHT
+    val showScrollbar = if (isLandscape) settings.landscapeShowScrollbar else settings.showScrollbar
+    val scrollbarOnLeft = if (isLandscape) settings.landscapeScrollbarOnLeft else settings.scrollbarOnLeft
+    val isRightAligned = (if (isLandscape) settings.landscapeAppDrawerAlignment else settings.appDrawerAlignment) == Constants.AppDrawerAlignment.RIGHT
 
     val appsToShow = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
 
@@ -310,11 +323,12 @@ fun AppDrawerScreen(
         hasAutoSelected = false
     }
 
-    LaunchedEffect(appsToShow, settings.autoOpenFilteredApp, searchQuery) {
+    val effectiveAutoOpenFilteredApp = if (isLandscape) settings.landscapeAutoOpenFilteredApp else settings.autoOpenFilteredApp
+    LaunchedEffect(appsToShow, effectiveAutoOpenFilteredApp, searchQuery) {
         if (
             searchQuery.isNotEmpty() &&
             appsToShow.size == 1 &&
-            settings.autoOpenFilteredApp &&
+            effectiveAutoOpenFilteredApp &&
             !hasAutoSelected
         ) {
             handleAppClick(appsToShow[0])
@@ -439,6 +453,162 @@ fun AppDrawerScreen(
             )
         }
 
+        if (isLandscape) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.35f)
+                        .fillMaxHeight()
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AppDrawerSearch(
+                        searchQuery = searchQuery,
+                        onSearchChanged = { query -> viewModel.searchApps(query) },
+                        modifier = Modifier.focusRequester(focusRequester).fillMaxWidth(),
+                        onEnterPressed = {
+                            val appsToOpen = if (searchQuery.isEmpty()) uiState.apps else uiState.filteredApps
+                            if (appsToOpen.isNotEmpty()) handleAppClick(appsToOpen[0])
+                        },
+                        onFocusStateChanged = { focused -> isSearchFocused = focused }
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    when {
+                        uiState.isLoading -> Box(Modifier.fillMaxSize(), Alignment.Center) { CircularProgressIndicator() }
+                        uiState.error != null -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("Error: ${uiState.error}") }
+                        uiState.apps.isEmpty() && searchQuery.isEmpty() -> Box(Modifier.fillMaxSize(), Alignment.Center) { Text("No apps found") }
+                        uiState.filteredApps.isEmpty() && searchQuery.isNotEmpty() -> {
+                            Box(Modifier.fillMaxSize(), Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("No apps found matching \"$searchQuery\"", color = MaterialTheme.colorScheme.onBackground)
+                                    if (settings.showWebSearchOption) {
+                                        Button(
+                                            onClick = {
+                                                if (searchQuery.startsWith("!")) {
+                                                    context.openSearch(Constants.URL_DUCK_SEARCH + searchQuery.substring(1).replace(" ", "%20"))
+                                                } else {
+                                                    context.openSearch(searchQuery.trim())
+                                                }
+                                            },
+                                            modifier = Modifier.padding(top = 16.dp)
+                                        ) {
+                                            Text("Search Web")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            if (settings.landscapeAppDrawerStyle == Constants.LandscapeDrawerStyle.PAGED_GRID) {
+                                val customTextColor = if (settings.useCustomTextColor && settings.textColor != 0) {
+                                    Color(settings.textColor)
+                                } else {
+                                    null
+                                }
+                                LandscapePagedGrid(
+                                    displayList = displayList,
+                                    itemSpacing = itemSpacing,
+                                    textSizeScale = settings.textSizeScale,
+                                    shouldShowIcons = shouldShowIcons,
+                                    showLabelsInList = showLabelsInList,
+                                    iconCornerRadius = settings.iconCornerRadius.dp,
+                                    fontFamily = appDrawerFontFamily,
+                                    fontWeight = fontWeight,
+                                    textColor = customTextColor,
+                                    isRightAligned = isRightAligned,
+                                    showShortcutIcon = settings.showShortcutIcon,
+                                    onAppClick = { app ->
+                                        if (selectionMode || settings.appDrawerTapToOpen) handleAppClick(app)
+                                    },
+                                    onAppLongClick = { app ->
+                                        if (settings.appDrawerLongPressEnabled && !selectionMode) {
+                                            selectedApp = app
+                                            showContextMenu = true
+                                        }
+                                    },
+                                    isAppInPrivateSpace = { app -> viewModel.isPrivateSpaceSupported && viewModel.isAppInPrivateSpace(app) },
+                                )
+                            } else {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    val scrollbarPadding = if (showScrollbar && displayList.isNotEmpty()) {
+                                        if (scrollbarOnLeft) Modifier.padding(start = 12.dp)
+                                        else Modifier.padding(end = 12.dp)
+                                    } else Modifier
+                                    LazyColumn(
+                                        state = scrollState,
+                                        modifier = Modifier.fillMaxSize().then(scrollbarPadding),
+                                        verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                                    ) {
+                                        items(
+                                            items = displayList,
+                                            key = { app -> app.getKey() }
+                                        ) { app ->
+                                            val customTextColor = if (settings.useCustomTextColor && settings.textColor != 0) {
+                                                Color(settings.textColor)
+                                            } else {
+                                                null
+                                            }
+                                            AppListItem(
+                                                appLabel = app.appLabel,
+                                                appIcon = if (shouldShowIcons) app.appIcon else null,
+                                                showIcon = shouldShowIcons,
+                                                showLabel = showLabelsInList,
+                                                iconCornerRadius = settings.iconCornerRadius.dp,
+                                                fontScale = searchResultsFontSize,
+                                                fontFamily = appDrawerFontFamily,
+                                                fontWeight = fontWeight,
+                                                textColor = customTextColor,
+                                                isRightAligned = isRightAligned,
+                                                onClick = {
+                                                    if (selectionMode || settings.appDrawerTapToOpen) handleAppClick(app)
+                                                },
+                                                onLongClick = {
+                                                    if (settings.appDrawerLongPressEnabled && !selectionMode) {
+                                                        selectedApp = app
+                                                        showContextMenu = true
+                                                    }
+                                                },
+                                                labelPrefix = if (app.isSystemShortcut && settings.showShortcutIcon) {
+                                                    {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Language,
+                                                            contentDescription = null,
+                                                            tint = customTextColor ?: MaterialTheme.colorScheme.onSurface,
+                                                            modifier = Modifier.size(12.dp)
+                                                        )
+                                                    }
+                                                } else null,
+                                                trailing = if (viewModel.isPrivateSpaceSupported && viewModel.isAppInPrivateSpace(app)) {
+                                                    { PrivateSpaceIndicator(true) }
+                                                } else null
+                                            )
+                                        }
+                                    }
+                                    if (showScrollbar && displayList.isNotEmpty()) {
+                                        ScrollbarIndicator(
+                                            listState = scrollState,
+                                            totalItems = displayList.size,
+                                            reverseLayout = false,
+                                            alignToStart = scrollbarOnLeft,
+                                            modifier = Modifier.align(
+                                                if (scrollbarOnLeft) Alignment.TopStart else Alignment.TopEnd
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
         if (!isBottomSearch) {
             Row(
                 modifier = Modifier
@@ -656,6 +826,7 @@ fun AppDrawerScreen(
                 }
             }
         }
+        } // end else (portrait)
     }
 
     if (showContextMenu && selectedApp != null) {
@@ -992,6 +1163,108 @@ private fun ScrollableAppDrawerContextMenu(
 }
 
 
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun LandscapePagedGrid(
+    displayList: List<AppModel>,
+    itemSpacing: Dp,
+    textSizeScale: Float,
+    shouldShowIcons: Boolean,
+    showLabelsInList: Boolean,
+    iconCornerRadius: Dp,
+    fontFamily: FontFamily?,
+    fontWeight: FontWeight,
+    textColor: Color?,
+    isRightAligned: Boolean,
+    showShortcutIcon: Boolean,
+    onAppClick: (AppModel) -> Unit,
+    onAppLongClick: (AppModel) -> Unit,
+    isAppInPrivateSpace: (AppModel) -> Boolean,
+) {
+    val dotRowHeight = 14.dp
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val availableHeight = maxHeight - dotRowHeight
+        val rawItemHeight = ((14f * textSizeScale * 1.4f) + 24f).dp + itemSpacing
+        val itemHeight = maxOf(28.dp, rawItemHeight)
+        val itemsPerPage = maxOf(2, (floor((availableHeight.value / itemHeight.value).toDouble()) * 2).toInt())
+        val pages = displayList.chunked(itemsPerPage)
+        val pagerState = rememberPagerState(pageCount = { pages.size })
+
+        LaunchedEffect(pages.size) {
+            if (pages.isNotEmpty() && pagerState.currentPage >= pages.size) {
+                pagerState.scrollToPage(0)
+            }
+        }
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { pageIndex ->
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(itemSpacing),
+                ) {
+                    gridItems(
+                        items = pages.getOrElse(pageIndex) { emptyList() },
+                        key = { app -> app.getKey() }
+                    ) { app ->
+                        AppListItem(
+                            appLabel = app.appLabel,
+                            appIcon = if (shouldShowIcons) app.appIcon else null,
+                            showIcon = shouldShowIcons,
+                            showLabel = showLabelsInList,
+                            iconCornerRadius = iconCornerRadius,
+                            fontScale = textSizeScale,
+                            fontFamily = fontFamily,
+                            fontWeight = fontWeight,
+                            textColor = textColor,
+                            isRightAligned = isRightAligned,
+                            onClick = { onAppClick(app) },
+                            onLongClick = { onAppLongClick(app) },
+                            labelPrefix = if (app.isSystemShortcut && showShortcutIcon) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.Language,
+                                        contentDescription = null,
+                                        tint = textColor ?: MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
+                            } else null,
+                            trailing = if (isAppInPrivateSpace(app)) {
+                                { PrivateSpaceIndicator(true) }
+                            } else null
+                        )
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(dotRowHeight),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                pages.indices.forEach { index ->
+                    val isActive = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .height(4.dp)
+                            .width(if (isActive) 11.dp else 4.dp)
+                            .background(
+                                color = if (isActive) Color(0xFF777777) else Color(0xFF2A2A2A),
+                                shape = if (isActive) RoundedCornerShape(2.dp) else CircleShape
+                            )
+                    )
+                    if (index < pages.size - 1) Spacer(Modifier.width(5.dp))
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun AppDrawerSearch(

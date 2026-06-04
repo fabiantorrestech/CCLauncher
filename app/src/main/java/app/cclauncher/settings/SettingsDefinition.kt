@@ -610,6 +610,79 @@ data class AppSettings(
     val showIconsInLandscape: Boolean = false,
 
     @Setting(
+        title = "Landscape Drawer Style",
+        description = "How apps are displayed in the right pane when in landscape mode",
+        category = Layout::class,
+        type = Dropdown::class,
+        options = ["Scrollable List", "Paged Grid"],
+        key = "LANDSCAPE_APP_DRAWER_STYLE",
+    )
+    val landscapeAppDrawerStyle: Int = Constants.LandscapeDrawerStyle.SCROLLABLE_LIST,
+
+    @Setting(
+        title = "Auto-Show Keyboard in Landscape",
+        category = General::class,
+        type = Toggle::class,
+        key = "LANDSCAPE_AUTO_SHOW_KEYBOARD",
+    )
+    val landscapeAutoShowKeyboard: Boolean = true,
+
+    @Setting(
+        title = "Auto-Open Single Match in Landscape",
+        category = General::class,
+        type = Toggle::class,
+        key = "LANDSCAPE_AUTO_OPEN_FILTERED_APP",
+    )
+    val landscapeAutoOpenFilteredApp: Boolean = false,
+
+    @Setting(
+        title = "Landscape Search Results Font Size",
+        description = "Text size for the app list in landscape mode",
+        category = Appearance::class,
+        type = Slider::class,
+        min = 0.5f,
+        max = 3.0f,
+        step = 0.1f,
+        key = "LANDSCAPE_SEARCH_RESULTS_FONT_SIZE",
+    )
+    val landscapeSearchResultsFontSize: Float = 1.0f,
+
+    @Setting(
+        title = "Landscape Item Spacing",
+        category = Appearance::class,
+        type = Dropdown::class,
+        options = ["None", "Small", "Medium", "Large"],
+        key = "LANDSCAPE_ITEM_SPACING",
+    )
+    val landscapeItemSpacing: Int = 1,
+
+    @Setting(
+        title = "Landscape App Drawer Alignment",
+        category = General::class,
+        type = Dropdown::class,
+        options = ["Left", "Right"],
+        key = "LANDSCAPE_APP_DRAWER_ALIGNMENT",
+    )
+    val landscapeAppDrawerAlignment: Int = Constants.AppDrawerAlignment.LEFT,
+
+    @Setting(
+        title = "Show Scrollbar in Landscape",
+        category = General::class,
+        type = Toggle::class,
+        key = "LANDSCAPE_SHOW_SCROLLBAR",
+    )
+    val landscapeShowScrollbar: Boolean = true,
+
+    @Setting(
+        title = "Scrollbar on Left in Landscape",
+        category = General::class,
+        type = Toggle::class,
+        dependsOn = "landscapeShowScrollbar",
+        key = "LANDSCAPE_SCROLLBAR_ON_LEFT",
+    )
+    val landscapeScrollbarOnLeft: Boolean = false,
+
+    @Setting(
         title = "Show App Icons in Portrait",
         category = Layout::class,
         type = Toggle::class,
