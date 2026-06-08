@@ -16,7 +16,6 @@ import android.os.Looper
 import android.content.res.Configuration
 import android.os.UserHandle
 import android.util.Log
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -24,7 +23,6 @@ import app.cclauncher.data.*
 import app.cclauncher.data.Constants.MAX_PAGES
 import app.cclauncher.data.repository.AppRepository
 import app.cclauncher.helper.AppTagStorage
-import app.cclauncher.helper.BitmapUtils
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.settings.AppPreference
 import app.cclauncher.settings.AppSettings
@@ -62,6 +60,7 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
     private val appContext = application.applicationContext
     val settingsRepository: AppSettingsRepository by inject()
     private val appRepository: AppRepository by inject()
+    private val iconCache: IconCache by inject()
 
     private val REQUEST_CODE_CONFIGURE_WIDGET = WidgetConstants.REQUEST_CONFIGURE_WIDGET
     private var pendingWidgetInfo: PendingWidgetInfo? = null
@@ -203,9 +202,33 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             settingsRepository.ensureOrientationAwareMigration()
         }
 
+        // Settings snapshot: pass-through so every consumer sees changes immediately.
+        viewModelScope.launch {
+            settingsRepository.settings.collect { _settingsSnapshot.value = it }
+        }
+
+        // Home layout: only recompute when fields that affect the layout actually change.
+        // Unrelated toggles (text color, animations, etc.) used to retrigger the full layout
+        // pipeline, which was a steady-state CPU drain.
         viewModelScope.launch {
             combine(
-                settingsRepository.settings,
+                settingsRepository.settings
+                    .distinctUntilChangedBy { s ->
+                        // Fields the layout pipeline below actually reads. Anything else
+                        // (text color, animation toggles, ...) shouldn't retrigger it.
+                        Triple(
+                            s.homeLayouts,
+                            listOf(
+                                s.homeRowsFor(HomeOrientation.PORTRAIT),
+                                s.homeColumnsFor(HomeOrientation.PORTRAIT),
+                                s.homePagesFor(HomeOrientation.PORTRAIT),
+                                s.homeRowsFor(HomeOrientation.LANDSCAPE),
+                                s.homeColumnsFor(HomeOrientation.LANDSCAPE),
+                                s.homePagesFor(HomeOrientation.LANDSCAPE)
+                            ),
+                            s.screenOrientation
+                        )
+                    },
                 _activeHomeOrientation
             ) { settings, requestedOrientation ->
                 val effectiveOrientation = resolveEffectiveHomeOrientation(settings, requestedOrientation)
@@ -219,9 +242,8 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     columns = settings.homeColumnsFor(effectiveOrientation),
                     pageCount = settings.homePagesFor(effectiveOrientation)
                 )
-                Triple(loadIconsForHomeLayout(updatedLayout, settings), effectiveOrientation, settings)
-            }.collect { (updatedLayout, effectiveOrientation, settings) ->
-                _settingsSnapshot.value = settings
+                effectiveOrientation to updatedLayout
+            }.collect { (effectiveOrientation, updatedLayout) ->
                 _activeHomeOrientation.value = effectiveOrientation
                 _homeLayoutState.value = updatedLayout
                 if (_currentPage.value >= updatedLayout.pageCount) {
@@ -270,7 +292,9 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 .distinctUntilChanged()
                 .drop(1) // Skip initial value
                 .collect { _ ->
-                    refreshHomeScreenAppIcons()
+                    // Icons are loaded per-composition via rememberAppIcon -> IconCache.
+                    // Just evict the cache so the new pack's icons get fetched next render.
+                    iconCache.clearCache()
                 }
         }
 
@@ -284,12 +308,14 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                 }
         }
 
-        // Rebuild alias index whenever app list or relevant settings change
+        // Rebuild alias index whenever app list or relevant settings change.
+        // Compare raw appTagsJson string (cheap) instead of the decoded Map (forces decode
+        // on every settings emission, even for unrelated fields).
         viewModelScope.launch {
             combine(
                 appRepository.appListAll,
                 settingsRepository.settings
-                    .map { Triple(it.searchAliasesMode, it.searchIncludePackageNames, AppTagStorage.decode(it.appTagsJson)) }
+                    .map { Triple(it.searchAliasesMode, it.searchIncludePackageNames, it.appTagsJson) }
                     .distinctUntilChanged()
             ) { _, _ -> }
                 .collect {
@@ -419,114 +445,6 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
             idx[app.getKey()] = aliases
         }
         searchAliasIndex = idx
-    }
-
-    /**
-     * Load icons for all apps in the home layout
-     */
-    private suspend fun loadIconsForHomeLayout(layout: HomeLayout, settings: AppSettings): HomeLayout {
-        if (!settings.showHomeScreenIcons) {
-            return layout // Don't load icons if they're not shown
-        }
-
-        val iconCache = IconCache(appContext)
-
-        val updatedItems = layout.items.map { item ->
-            when (item) {
-                is HomeItem.App -> {
-                    val resolvedUser = getUserHandleFromString(appContext, item.appModel.userString)
-                    val icon = if (item.appModel.isSystemShortcut &&
-                        item.appModel.systemShortcutId != null &&
-                        item.appModel.systemShortcutPackage != null &&
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1
-                    ) {
-                        val launcherApps = appContext.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-                        if (!launcherApps.hasShortcutHostPermission()) {
-                            null
-                        } else {
-                            val query = LauncherApps.ShortcutQuery()
-                                .setPackage(item.appModel.systemShortcutPackage)
-                                .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
-                            val shortcut = launcherApps.getShortcuts(query, resolvedUser)
-                                .orEmpty()
-                                .firstOrNull { it.id == item.appModel.systemShortcutId }
-
-                            val iconDrawable = shortcut?.let {
-                                launcherApps.getShortcutIconDrawable(it, appContext.resources.displayMetrics.densityDpi)
-                            }
-                            BitmapUtils.drawableToBitmap(iconDrawable)?.asImageBitmap()
-                        }
-                    } else {
-                        iconCache.getIcon(
-                            packageName = item.appModel.appPackage,
-                            className = item.appModel.activityClassName,
-                            user = resolvedUser,
-                            iconPackName = settings.selectedIconPack,
-                        )
-                    }
-                    val updatedAppModel = item.appModel.copy(appIcon = icon)
-                    item.copy(appModel = updatedAppModel)
-                }
-                is HomeItem.Widget -> item
-                is HomeItem.Folder -> item
-            }
-        }
-
-        return layout.copy(items = updatedItems)
-    }
-
-    private suspend fun refreshHomeScreenAppIcons() {
-        val currentLayout = _homeLayoutState.value
-        val settings = settingsRepository.settings.first()
-        val iconCache = IconCache(appContext)
-
-        val updatedItems = currentLayout.items.map { item ->
-            when (item) {
-                is HomeItem.App -> {
-                    val updatedIcon = if (settings.showHomeScreenIcons) {
-                        if (item.appModel.isSystemShortcut &&
-                            item.appModel.systemShortcutId != null &&
-                            item.appModel.systemShortcutPackage != null &&
-                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1
-                        ) {
-                            val launcherApps = appContext.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-                            if (!launcherApps.hasShortcutHostPermission()) {
-                                null
-                            } else {
-                                val query = LauncherApps.ShortcutQuery()
-                                    .setPackage(item.appModel.systemShortcutPackage)
-                                    .setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
-                                val shortcut = launcherApps.getShortcuts(query, item.appModel.user)
-                                    .orEmpty()
-                                    .firstOrNull { it.id == item.appModel.systemShortcutId }
-
-                                val iconDrawable = shortcut?.let {
-                                    launcherApps.getShortcutIconDrawable(it, appContext.resources.displayMetrics.densityDpi)
-                                }
-                                BitmapUtils.drawableToBitmap(iconDrawable)?.asImageBitmap()
-                            }
-                        } else {
-                            iconCache.getIcon(
-                                packageName = item.appModel.appPackage,
-                                className = item.appModel.activityClassName,
-                                user = item.appModel.user,
-                                iconPackName = settings.selectedIconPack,
-                            )
-                        }
-                    } else {
-                        null
-                    }
-                    val updatedAppModel = item.appModel.copy(appIcon = updatedIcon)
-                    item.copy(appModel = updatedAppModel)
-                }
-                is HomeItem.Widget -> item
-                is HomeItem.Folder -> item
-            }
-        }
-
-        val updatedLayout = currentLayout.copy(items = updatedItems)
-        _homeLayoutState.value = updatedLayout
-        settingsRepository.saveHomeLayout(updatedLayout)
     }
 
     suspend fun updateGridSize(newRows: Int, newColumns: Int) {

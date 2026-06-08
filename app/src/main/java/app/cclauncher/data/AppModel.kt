@@ -2,7 +2,6 @@ package app.cclauncher.data
 
 import android.os.UserHandle
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.graphics.ImageBitmap
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.text.CollationKey
@@ -18,8 +17,6 @@ data class AppModel(
     val isNew: Boolean = false,
     @Transient
     val user: UserHandle = android.os.Process.myUserHandle(),
-    @Transient
-    val appIcon: ImageBitmap? = null,
     val isHidden: Boolean = false,
     val userString: String = user.toString(),
     @Transient

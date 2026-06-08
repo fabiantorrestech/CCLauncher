@@ -193,16 +193,12 @@ class AppRepository(
                             val shownLabel = listOf(appKey, legacyKey)
                                 .firstNotNullOfOrNull { renamedApps[it] }
                                 ?: label
-                            val iconDrawable = launcherApps.getShortcutIconDrawable(shortcut, context.resources.displayMetrics.densityDpi)
-                            val iconBitmap = BitmapUtils.drawableToBitmap(iconDrawable)?.asImageBitmap()
-
                             list.add(
                                 AppModel(
                                     appLabel = shownLabel,
                                     appPackage = shortcut.`package`,
                                     activityClassName = null,
                                     user = user,
-                                    appIcon = iconBitmap,
                                     isSystemShortcut = true,
                                     systemShortcutId = shortcut.id,
                                     systemShortcutPackage = shortcut.`package`,

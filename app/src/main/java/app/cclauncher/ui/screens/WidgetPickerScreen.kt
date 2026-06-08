@@ -277,7 +277,7 @@ private suspend fun loadWidgetPreview(
 ): Bitmap? {
     return withContext(Dispatchers.IO) {
         widgetInfo.loadPreviewImage(context, 0)?.let { drawable ->
-            drawableToBitmap(drawable, defaultSize = 100)
+            drawableToBitmap(drawable, targetDp = 100)
         }
     }
 }

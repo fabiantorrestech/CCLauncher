@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetHost
 import app.cclauncher.MainViewModel
 import app.cclauncher.data.WidgetConstants
 import app.cclauncher.data.repository.AppRepository
+import app.cclauncher.helper.IconCache
 import app.cclauncher.settings.AppSettingsRepository
 import app.cclauncher.ui.components.snackbar.SnackbarManager
 import app.cclauncher.ui.viewmodels.SettingsViewModel
@@ -21,6 +22,8 @@ val appModule = module {
     single { AppSettingsRepository(androidContext()) }
 
     single { AppWidgetHost(androidContext(), WidgetConstants.APPWIDGET_HOST_ID) }
+
+    single { IconCache(androidContext()) }
 
     single {
         AppRepository(

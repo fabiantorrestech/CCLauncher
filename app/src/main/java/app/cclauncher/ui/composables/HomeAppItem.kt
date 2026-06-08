@@ -21,19 +21,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,11 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.cclauncher.data.AppModel
 import app.cclauncher.data.Constants
+import app.cclauncher.helper.rememberAppIcon
 import app.cclauncher.loadFontFamily
 import app.cclauncher.LocalLauncherFontSettings
 import app.cclauncher.settings.AppSettings
-import app.cclauncher.helper.IconCache
-import kotlinx.coroutines.launch
 
 @Composable
 fun HomeAppItem(
@@ -62,10 +56,6 @@ fun HomeAppItem(
     shortcutIconPlacement: Int = Constants.IconPlacement.LEFT,
     labelFontPath: String = "",
 ) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val iconCache = remember { IconCache(context) }
-    var loadedIcon by remember(app.getKey()) { mutableStateOf(app.appIcon) }
     val textColor = if (settings.useCustomTextColor && settings.textColor != 0) {
         Color(settings.textColor)
     } else {
@@ -77,19 +67,11 @@ fun HomeAppItem(
         if (isLandscape) settings.showIconsInLandscape else settings.showIconsInPortrait
     } else { false }
 
-    // Load icon asynchronously if needed and not already loaded
-    LaunchedEffect(app.getKey(), showHomeIcons) {
-        if (showHomeIcons && loadedIcon == null) {
-            coroutineScope.launch {
-                val icon = iconCache.getIcon(
-                    packageName = app.appPackage,
-                    className = app.activityClassName,
-                    user = app.user
-                )
-                loadedIcon = icon
-            }
-        }
-    }
+    val loadedIcon = rememberAppIcon(
+        app = app,
+        iconPackName = settings.selectedIconPack,
+        enabled = showHomeIcons
+    )
 
     val showIcons = showHomeIcons
     val showName = if (showHomeIcons) settings.showAppNames else true //TODO: Add a separate setting later? When settings are arranged properly ig

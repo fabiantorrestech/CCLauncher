@@ -112,6 +112,7 @@ import app.cclauncher.data.HomeOrientation
 import app.cclauncher.helper.isSystemApp
 import app.cclauncher.helper.openAppInfo
 import app.cclauncher.helper.openSearch
+import app.cclauncher.helper.rememberAppIcon
 import app.cclauncher.helper.uninstall
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppListItem
@@ -126,6 +127,7 @@ import app.cclauncher.ui.composables.KeyboardShortcutDialog
 import app.cclauncher.ui.util.detectSwipeGestures
 import app.cclauncher.ui.viewmodels.SettingsViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.yield
 import org.koin.androidx.compose.koinViewModel
 
@@ -359,7 +361,7 @@ fun AppDrawerScreen(
                 scrollState.firstVisibleItemScrollOffset,
                 scrollState.isScrollInProgress
             )
-        }.collect { (currentIndex, currentOffset, isScrolling) ->
+        }.distinctUntilChanged().collect { (currentIndex, currentOffset, isScrolling) ->
             if (isScrolling) {
                 val actualScrollHappened = currentIndex != previousIndex || currentOffset != previousOffset
                 if (actualScrollHappened) {
@@ -557,7 +559,7 @@ fun AppDrawerScreen(
                                             }
                                             AppListItem(
                                                 appLabel = app.appLabel,
-                                                appIcon = if (shouldShowIcons) app.appIcon else null,
+                                                appIcon = rememberAppIcon(app, settings.selectedIconPack, shouldShowIcons),
                                                 showIcon = shouldShowIcons,
                                                 showLabel = showLabelsInList,
                                                 iconCornerRadius = settings.iconCornerRadius.dp,
@@ -728,7 +730,7 @@ fun AppDrawerScreen(
 
                                 AppListItem(
                                     appLabel = app.appLabel,
-                                    appIcon = if (shouldShowIcons) app.appIcon else null,
+                                    appIcon = rememberAppIcon(app, settings.selectedIconPack, shouldShowIcons),
                                     showIcon = shouldShowIcons,
                                     showLabel = showLabelsInList,
                                     iconCornerRadius = settings.iconCornerRadius.dp,
@@ -1213,7 +1215,7 @@ private fun LandscapePagedGrid(
                     ) { app ->
                         AppListItem(
                             appLabel = app.appLabel,
-                            appIcon = if (shouldShowIcons) app.appIcon else null,
+                            appIcon = rememberAppIcon(app, settings.selectedIconPack, shouldShowIcons),
                             showIcon = shouldShowIcons,
                             showLabel = showLabelsInList,
                             iconCornerRadius = iconCornerRadius,

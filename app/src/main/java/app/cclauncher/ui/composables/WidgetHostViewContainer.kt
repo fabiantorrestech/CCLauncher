@@ -123,8 +123,11 @@ fun WidgetHostViewContainer(
                                             touchStartPosition.x, touchStartPosition.y,
                                             0
                                         )
-                                        widgetView.dispatchTouchEvent(motionEvent)
-                                        motionEvent.recycle()
+                                        try {
+                                            widgetView.dispatchTouchEvent(motionEvent)
+                                        } finally {
+                                            motionEvent.recycle()
+                                        }
                                     }
 
                                     PointerEventType.Move -> {
@@ -144,8 +147,11 @@ fun WidgetHostViewContainer(
                                             currentPosition.x, currentPosition.y,
                                             0
                                         )
-                                        widgetView.dispatchTouchEvent(motionEvent)
-                                        motionEvent.recycle()
+                                        try {
+                                            widgetView.dispatchTouchEvent(motionEvent)
+                                        } finally {
+                                            motionEvent.recycle()
+                                        }
                                     }
 
                                     PointerEventType.Release, PointerEventType.Exit -> {
@@ -164,8 +170,11 @@ fun WidgetHostViewContainer(
                                             currentPosition.x, currentPosition.y,
                                             0
                                         )
-                                        widgetView.dispatchTouchEvent(motionEvent)
-                                        motionEvent.recycle()
+                                        try {
+                                            widgetView.dispatchTouchEvent(motionEvent)
+                                        } finally {
+                                            motionEvent.recycle()
+                                        }
                                     }
                                 }
                             }

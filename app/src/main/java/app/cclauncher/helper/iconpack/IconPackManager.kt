@@ -17,7 +17,11 @@ class IconPackManager(context: Context) {
     private val packageManager = context.packageManager
 
     // cacheKey = "pack|package/class"
-    private val iconPackCache = LruCache<String, Bitmap>(150)
+    // Byte-sized LRU: icon-pack drawables are typically 192²–256², easily 150–250 KB each.
+    // 4 MB caps roughly 16–25 entries — plenty for the most-used apps without unbounded growth.
+    private val iconPackCache = object : LruCache<String, Bitmap>(ICON_PACK_CACHE_MAX_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+    }
     private val iconPackMappings = ConcurrentHashMap<String, IconPackInfo>()
 
     data class IconPackInfo(
@@ -164,5 +168,9 @@ class IconPackManager(context: Context) {
     fun clearCache() {
         iconPackCache.evictAll()
         iconPackMappings.clear()
+    }
+
+    companion object {
+        private const val ICON_PACK_CACHE_MAX_BYTES = 4 * 1024 * 1024 // 4 MB
     }
 }

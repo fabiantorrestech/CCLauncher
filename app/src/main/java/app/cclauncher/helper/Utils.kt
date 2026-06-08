@@ -69,15 +69,11 @@ suspend fun getAppsList(
     try {
         val settings = settingsRepository.settings.first()
         val hiddenApps = settings.hiddenApps
-        val includeIcons = settings.showAppIcons
         val renamedApps = settings.renamedApps
-        val selectedIconPack = settings.selectedIconPack
 
         val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
         val collator = Collator.getInstance()
-
-        val iconCache = IconCache(context)
 
         val profiles = getLauncherVisibleProfiles(userManager, launcherApps)
 
@@ -120,15 +116,6 @@ suspend fun getAppsList(
                 val lastLaunchTime = keyCandidates.mapNotNull { settings.recentAppHistory[it] }
                     .maxOrNull() ?: 0L
 
-                val appIcon = if (includeIcons) {
-                    iconCache.getIcon(
-                        packageName = pkg,
-                        className = activity.componentName.className,
-                        user = profile,
-                        iconPackName = selectedIconPack
-                    )
-                } else null
-
                 val model = AppModel(
                     appLabel = shownLabel,
                     key = collator.getCollationKey(activity.label.toString()),
@@ -136,7 +123,6 @@ suspend fun getAppsList(
                     activityClassName = activity.componentName.className,
                     isNew = (System.currentTimeMillis() - activity.firstInstallTime) < AnimationConstants.ONE_HOUR_IN_MILLIS,
                     user = profile,
-                    appIcon = appIcon,
                     isHidden = isHidden,
                     userString = userString,
                     lastLaunchTime = lastLaunchTime

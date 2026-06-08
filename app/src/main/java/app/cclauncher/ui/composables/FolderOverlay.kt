@@ -174,7 +174,10 @@ fun FolderOverlay(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer { alpha = animAlpha }
-            .blur(animBlur)
+            // Only apply the blur modifier while it's actually animating: blur() forces an
+            // offscreen render layer for the entire box; leaving it on at 0.dp still pays
+            // the offscreen-layer cost every frame the overlay is visible.
+            .then(if (animationsEnabled && animBlur > 0.dp) Modifier.blur(animBlur) else Modifier)
             .background(Color.Black.copy(alpha = settings.folderBackgroundOpacity))
             // Consume drag events so swipe gestures on the backdrop don't leak through
             // to the home screen gesture handler underneath.
@@ -603,16 +606,21 @@ private fun FolderGridContent(
             folder.apps.forEach { app ->
                 val isMoving = movingApp == app
 
-                val itemMod = Modifier
-                    .offset(x = cellWidth * app.column, y = cellHeight * app.row)
-                    .size(width = cellWidth * app.columnSpan, height = cellHeight * app.rowSpan)
-                    .then(
-                        if (isMoving)
-                            Modifier
-                                .alpha(0.6f)
-                                .border(2.dp, Color.White, RoundedCornerShape(4.dp))
-                        else Modifier
-                    )
+                // Position/size only depend on the cell dims + the app's grid coordinates;
+                // movingApp changes (state read on every drag tick) used to rebuild the
+                // whole modifier chain unnecessarily.
+                val baseMod = remember(cellWidth, cellHeight, app.column, app.row, app.columnSpan, app.rowSpan) {
+                    Modifier
+                        .offset(x = cellWidth * app.column, y = cellHeight * app.row)
+                        .size(width = cellWidth * app.columnSpan, height = cellHeight * app.rowSpan)
+                }
+                val itemMod = baseMod.then(
+                    if (isMoving)
+                        Modifier
+                            .alpha(0.6f)
+                            .border(2.dp, Color.White, RoundedCornerShape(4.dp))
+                    else Modifier
+                )
 
                 HomeFolderAppItem(
                     folderApp = app,

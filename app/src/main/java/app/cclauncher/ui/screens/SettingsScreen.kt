@@ -1479,7 +1479,7 @@ private fun SettingsFieldRenderer(
         }
 
         IconPackPicker::class -> {
-            val iconCache = remember { IconCache(context) }
+            val iconCache: IconCache = koinInject()
             var availableIconPacks by remember {
                 mutableStateOf<List<IconPackManager.IconPackInfo>>(emptyList())
             }

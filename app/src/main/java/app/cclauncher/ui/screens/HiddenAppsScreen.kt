@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.cclauncher.MainViewModel
+import app.cclauncher.helper.rememberAppIcon
 import app.cclauncher.ui.components.AppListItem
 import app.cclauncher.ui.theme.AnimationConfig
 
@@ -25,6 +26,7 @@ fun HiddenAppsScreen(
     onNavigateBack: () -> Unit
 ) {
     val hiddenApps by viewModel.hiddenApps.collectAsState()
+    val settings by viewModel.settingsSnapshot.collectAsState()
     val isLoading by remember { mutableStateOf(false) }
 
     // Load hidden apps when screen is shown
@@ -94,10 +96,11 @@ fun HiddenAppsScreen(
                         items = hiddenApps,
                         key = { app -> app.getKey() }
                     ) { app ->
+                        val icon = rememberAppIcon(app, settings.selectedIconPack)
                         AppListItem(
                             appLabel = app.appLabel,
-                            appIcon = app.appIcon,
-                            showIcon = app.appIcon != null,
+                            appIcon = icon,
+                            showIcon = icon != null,
                             onClick = { viewModel.launchApp(app) },
                             onLongClick = {
                                 // Unhide app and refresh list

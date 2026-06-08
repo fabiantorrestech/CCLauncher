@@ -34,7 +34,6 @@ import app.cclauncher.ui.CLauncherNavigation
 import app.cclauncher.ui.UiEvent
 import app.cclauncher.ui.util.updateStatusBarVisibility
 import app.cclauncher.ui.viewmodels.SettingsViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -48,6 +47,11 @@ class MainActivity : ComponentActivity() {
     private lateinit var privateSpaceReceiver: PrivateSpaceReceiver
     private val APPWIDGET_HOST_ID = WidgetConstants.APPWIDGET_HOST_ID
     private val REQUEST_CONFIGURE_WIDGET = WidgetConstants.REQUEST_CONFIGURE_WIDGET
+
+    // Throttle for onStart-driven app-list refresh. LauncherApps.Callback already
+    // triggers reloads on package events, so this is just a safety net for cases the
+    // callback can miss (process restart) — no need to fire it on every foregrounding.
+    private var lastAppLoadAtMs: Long = 0L
 
     private val appWidgetManagerInstance: AppWidgetManager by lazy {
         AppWidgetManager.getInstance(applicationContext)
@@ -160,26 +164,18 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Update status bar visibility
-        lifecycleScope.launch {
-            // Ensure window is ready
-            delay(500)
-            settingsRepository.settings.first().let { settings ->
-                try {
-                    updateStatusBarVisibility(this@MainActivity, settings.statusBar)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
+        // Status-bar visibility is applied once per foreground transition in onResume —
+        // no need for a delay(500) workaround or a re-apply on every window focus change.
 
         // Set up orientation observer
         lifecycleScope.launch {
-            settingsRepository.settings.collect { settings ->
-                when (settings.screenOrientation) {
-                    0 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    1 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    2 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE // Force landscape
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsRepository.settings.collect { settings ->
+                    when (settings.screenOrientation) {
+                        0 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        1 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        2 -> requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE // Force landscape
+                    }
                 }
             }
         }
@@ -209,7 +205,11 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Error starting widget host listening", e)
         }
 
-        loadAppsAndRefresh()
+        val now = System.currentTimeMillis()
+        if (now - lastAppLoadAtMs >= 30_000L) {
+            lastAppLoadAtMs = now
+            loadAppsAndRefresh()
+        }
     }
 
     override fun onStop() {
@@ -312,20 +312,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            // when window regains focus
-            lifecycleScope.launch {
-                val settings = settingsRepository.settings.first()
-                try {
-                    updateStatusBarVisibility(this@MainActivity, settings.statusBar)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-    }
 
 
     override fun onDestroy() {

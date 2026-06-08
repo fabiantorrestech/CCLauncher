@@ -233,15 +233,17 @@ fun HomeScreen(
     var focusedItemId by remember { mutableStateOf<String?>(null) }
     val keyboardShortcuts by viewModel.keyboardShortcuts.collectAsState()
 
-    val focusableItems by remember(homeLayoutState, pagerState.currentPage) {
+    // Use settledPage so the focus list doesn't churn while the user is mid-swipe.
+    // currentPage updates continuously during fling animations.
+    val focusableItems by remember(homeLayoutState, pagerState) {
         derivedStateOf {
-            homeLayoutState.itemsForPage(pagerState.currentPage)
+            homeLayoutState.itemsForPage(pagerState.settledPage)
                 .filter { it is HomeItem.App || (it is HomeItem.Folder && it.showOnHome) }
                 .sortedWith(compareBy({ it.row }, { it.column }))
         }
     }
 
-    LaunchedEffect(pagerState.currentPage) {
+    LaunchedEffect(pagerState.settledPage) {
         focusedItemId = null
     }
     var pendingHomeAppFontItem by remember { mutableStateOf<HomeItem.App?>(null) }
