@@ -1,6 +1,5 @@
 package app.cclauncher.ui.composables
 
-import android.widget.Toast
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,7 +72,6 @@ import app.cclauncher.data.Constants
 import app.cclauncher.data.FolderApp
 import app.cclauncher.data.HomeItem
 import app.cclauncher.loadFontFamily
-import app.cclauncher.helper.showToast
 import app.cclauncher.settings.AppSettings
 import app.cclauncher.ui.BackHandler
 import app.cclauncher.ui.components.AppTagsEditorDialog
@@ -88,7 +86,7 @@ fun FolderOverlay(
     onDismiss: () -> Unit,
     onLaunchApp: (FolderApp) -> Unit,
     onMoveApp: (FolderApp, Int, Int) -> Unit,
-    canMoveApp: (FolderApp, Int, Int) -> Boolean,
+    findNudgeTarget: (FolderApp, MoveDirection) -> Pair<Int, Int>?,
     onRemoveApp: (FolderApp) -> Unit,
     onResizeApp: (FolderApp, Int, Int) -> Unit,
     onAppRename: (FolderApp, String) -> Unit = { _, _ -> },
@@ -164,8 +162,7 @@ fun FolderOverlay(
 
     fun nudgeMovingApp(direction: MoveDirection): Boolean {
         val app = movingApp ?: return false
-        val (newRow, newColumn) = stepPosition(app.row, app.column, direction)
-        if (!canMoveApp(app, newRow, newColumn)) return false
+        val (newRow, newColumn) = findNudgeTarget(app, direction) ?: return false
         onMoveApp(app, newRow, newColumn)
         movingApp = app.copy(row = newRow, column = newColumn)
         return true
@@ -328,7 +325,6 @@ fun FolderOverlay(
                         onClick = {
                             movingApp = contextMenuApp
                             appContextMenu = null
-                            context.showToast("Tap where you want to move the app", Toast.LENGTH_SHORT)
                         },
                     )
                     ContextMenuItemRow(

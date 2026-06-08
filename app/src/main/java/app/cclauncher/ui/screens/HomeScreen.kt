@@ -9,7 +9,6 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -321,24 +320,21 @@ fun HomeScreen(
 
     fun nudgeMovingHomeItem(direction: MoveDirection): Boolean {
         widgetBeingMoved?.let { item ->
-            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
-            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            val (newRow, newColumn) = viewModel.findHomeNudgeTarget(item, direction) ?: return false
             viewModel.moveWidget(item, newRow, newColumn)
             widgetBeingMoved = item.copy(row = newRow, column = newColumn)
             return true
         }
 
         appBeingMoved?.let { item ->
-            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
-            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            val (newRow, newColumn) = viewModel.findHomeNudgeTarget(item, direction) ?: return false
             viewModel.moveApp(item, newRow, newColumn)
             appBeingMoved = item.copy(row = newRow, column = newColumn)
             return true
         }
 
         folderBeingMoved?.let { item ->
-            val (newRow, newColumn) = stepPosition(item.row, item.column, direction)
-            if (!viewModel.canMoveHomeItem(item, newRow, newColumn)) return false
+            val (newRow, newColumn) = viewModel.findHomeNudgeTarget(item, direction) ?: return false
             viewModel.moveFolder(item, newRow, newColumn)
             folderBeingMoved = item.copy(row = newRow, column = newColumn)
             return true
@@ -558,7 +554,6 @@ fun HomeScreen(
                     onMove = { app ->
                         appBeingMoved = app
                         showAppContextMenu = null
-                        context.showToast("Tap where you want to move the app")
                     },
                     onMoveToPage = { app, targetPage ->
                         viewModel.moveItemToPage(app, targetPage)
@@ -632,11 +627,6 @@ fun HomeScreen(
                     onMove = { widget ->
                         widgetBeingMoved = widget
                         showWidgetContextMenu = null
-                        context.showToast(
-                            if (widget.isPlaceholder) "Tap where you want to move the placeholder widget"
-                            else "Tap where you want to move the widget",
-                            Toast.LENGTH_SHORT
-                        )
                     },
                     onMoveToPage = { widget, targetPage ->
                         viewModel.moveItemToPage(widget, targetPage)
@@ -723,7 +713,6 @@ fun HomeScreen(
             onMove = { folder ->
                 folderBeingMoved = folder
                 showFolderContextMenu = null
-                context.showToast("Tap where you want to move the folder")
             },
             onMoveToPage = { folder, targetPage ->
                 viewModel.moveItemToPage(folder, targetPage)
@@ -812,8 +801,8 @@ fun HomeScreen(
                     onMoveApp = { folderApp, newRow, newCol ->
                         viewModel.moveFolderApp(fid, folderApp, newRow, newCol)
                     },
-                    canMoveApp = { folderApp, newRow, newCol ->
-                        viewModel.canMoveFolderApp(fid, folderApp, newRow, newCol)
+                    findNudgeTarget = { folderApp, direction ->
+                        viewModel.findFolderNudgeTarget(fid, folderApp, direction)
                     },
                     onRemoveApp = { folderApp ->
                         viewModel.removeAppFromFolder(fid, folderApp)

@@ -35,6 +35,7 @@ import app.cclauncher.settings.homePagesFor
 import app.cclauncher.settings.homeRowsFor
 import app.cclauncher.settings.isLandscapeHomeAvailable
 import app.cclauncher.settings.swipeAppFor
+import app.cclauncher.ui.components.MoveDirection
 import app.cclauncher.helper.IconCache
 import app.cclauncher.helper.MyAccessibilityService
 import app.cclauncher.helper.PrivateSpaceHelper
@@ -1299,6 +1300,45 @@ class MainViewModel(application: Application, private val appWidgetHost: AppWidg
                     return Pair(r, c)
                 }
             }
+        }
+        return null
+    }
+
+    fun findHomeNudgeTarget(item: HomeItem, direction: MoveDirection): Pair<Int, Int>? {
+        val layout = _homeLayoutState.value
+        val (dRow, dCol) = when (direction) {
+            MoveDirection.Up -> -1 to 0
+            MoveDirection.Down -> 1 to 0
+            MoveDirection.Left -> 0 to -1
+            MoveDirection.Right -> 0 to 1
+        }
+        var r = item.row + dRow
+        var c = item.column + dCol
+        while (r in 0..(layout.rows - item.rowSpan) && c in 0..(layout.columns - item.columnSpan)) {
+            val result = validatePlacement(layout, item.id, item.page, r, c, item.rowSpan, item.columnSpan)
+            if (result is PlacementResult.Valid) return r to c
+            r += dRow
+            c += dCol
+        }
+        return null
+    }
+
+    fun findFolderNudgeTarget(folderId: String, app: FolderApp, direction: MoveDirection): Pair<Int, Int>? {
+        val folder = _homeLayoutState.value.items
+            .filterIsInstance<HomeItem.Folder>()
+            .find { it.id == folderId } ?: return null
+        val (dRow, dCol) = when (direction) {
+            MoveDirection.Up -> -1 to 0
+            MoveDirection.Down -> 1 to 0
+            MoveDirection.Left -> 0 to -1
+            MoveDirection.Right -> 0 to 1
+        }
+        var r = app.row + dRow
+        var c = app.column + dCol
+        while (r in 0..(folder.gridRows - app.rowSpan) && c in 0..(folder.gridColumns - app.columnSpan)) {
+            if (validateFolderPlacement(folder, app, r, c, app.rowSpan, app.columnSpan)) return r to c
+            r += dRow
+            c += dCol
         }
         return null
     }

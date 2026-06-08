@@ -463,7 +463,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 4f,
-        max = 12f,
+        max = 24f,
         step = 1f,
         key = "HOME_SCREEN_ROWS",
     )
@@ -475,7 +475,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 2f,
-        max = 8f,
+        max = 16f,
         step = 1f,
         key = "HOME_SCREEN_COLUMNS",
     )
@@ -508,7 +508,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 4f,
-        max = 12f,
+        max = 24f,
         step = 1f,
         key = "PORTRAIT_HOME_SCREEN_ROWS",
     )
@@ -520,7 +520,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 2f,
-        max = 8f,
+        max = 16f,
         step = 1f,
         key = "PORTRAIT_HOME_SCREEN_COLUMNS",
     )
@@ -544,7 +544,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 4f,
-        max = 12f,
+        max = 16f,
         step = 1f,
         key = "LANDSCAPE_HOME_SCREEN_ROWS",
     )
@@ -556,7 +556,7 @@ data class AppSettings(
         category = Layout::class,
         type = Slider::class,
         min = 2f,
-        max = 8f,
+        max = 24f,
         step = 1f,
         key = "LANDSCAPE_HOME_SCREEN_COLUMNS",
     )

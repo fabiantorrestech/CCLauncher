@@ -80,9 +80,11 @@ object Constants {
 
     object GridSize {
         const val MIN_ROWS = 4
-        const val MAX_ROWS = 12
+        const val MAX_ROWS = 24
         const val MIN_COLUMNS = 2
-        const val MAX_COLUMNS = 8
+        const val MAX_COLUMNS = 16
+        const val MAX_LANDSCAPE_ROWS = 16
+        const val MAX_LANDSCAPE_COLUMNS = 24
         const val DEFAULT_ROWS = 8
         const val DEFAULT_COLUMNS = 4
     }
