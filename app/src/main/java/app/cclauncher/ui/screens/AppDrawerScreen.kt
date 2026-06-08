@@ -526,6 +526,7 @@ fun AppDrawerScreen(
                                     textColor = customTextColor,
                                     isRightAligned = isRightAligned,
                                     showShortcutIcon = settings.showShortcutIcon,
+                                    iconPackName = settings.selectedIconPack,
                                     onAppClick = { app ->
                                         if (selectionMode || settings.appDrawerTapToOpen) handleAppClick(app)
                                     },
@@ -1180,6 +1181,7 @@ private fun LandscapePagedGrid(
     textColor: Color?,
     isRightAligned: Boolean,
     showShortcutIcon: Boolean,
+    iconPackName: String,
     onAppClick: (AppModel) -> Unit,
     onAppLongClick: (AppModel) -> Unit,
     isAppInPrivateSpace: (AppModel) -> Boolean,
@@ -1215,7 +1217,7 @@ private fun LandscapePagedGrid(
                     ) { app ->
                         AppListItem(
                             appLabel = app.appLabel,
-                            appIcon = rememberAppIcon(app, settings.selectedIconPack, shouldShowIcons),
+                            appIcon = rememberAppIcon(app, iconPackName, shouldShowIcons),
                             showIcon = shouldShowIcons,
                             showLabel = showLabelsInList,
                             iconCornerRadius = iconCornerRadius,
