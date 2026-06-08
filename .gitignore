@@ -13,11 +13,17 @@
 /build
 /captures
 /app/release
-/.codex
-/.claude
-/docs
 .externalNativeBuild
 .cxx
 google-services.json
-.aider*
+
+# AI tools and subdirectories.
+/.codex
+/.claude
+/docs
 /handoffContext/
+/.superpowers/
+
+.aider*
+
+
